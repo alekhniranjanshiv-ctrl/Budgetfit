@@ -514,7 +514,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       </div>
     </div>
     <button class="btn primary generate-btn" onclick="generate()"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2.5px;margin-right:5px"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"></path></svg>Generate Quote</button>
-    <button class="btn generate-btn" style="margin-top:8px" onclick="generateVariants()">Generate 3 options (Budget · Balanced · Premium)</button>
+    <button class="btn generate-btn" style="margin-top:8px" onclick="generateVariants()">Generate 5 options (Essential · Budget · Balanced · Premium · Flagship)</button>
     <p class="hint" style="margin-top:8px">The engine picks one model per category, upgrading and downgrading until the equipment total lands as close to the budget as possible. Surround and Atmos speaker quantities scale with the channel selection — 7.1 uses two pairs of surrounds, 9.1 uses three; Atmos configs add height speakers on top. In HTiB mode the box covers a 5.1 setup on its own; picking 7.1+ adds an extra surround pair, and picking an Atmos config adds in-ceiling speakers, on top of the box. Installation/service lines and GST are added on top of the equipment budget.</p>
   </div>
 
@@ -721,7 +721,10 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         <p class="hint" style="margin-top:6px">Applies to fronts, center, surrounds, Atmos, subwoofer and HTiB together — so front L/R, center and surrounds all come from the same brand instead of whichever fits budget best.</p>
       </div>
       <table class="wt" id="wtTable"></table>
-      <button class="btn sm ghost" style="margin-top:8px" onclick="clearAllBrandPrefs()">Clear all brand preferences</button>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm ghost" onclick="clearAllBrandPrefs()">Clear all brand preferences</button>
+        <button class="btn sm" onclick="addCustomCategory()">+ Add category</button>
+      </div>
     </div>
   </div>
 </div>
@@ -761,6 +764,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </div>
         <div class="field"><label>Diagonal (in) <span class="hint" style="text-transform:none">— auto from quote</span></label><input id="rpScreen" type="number" step="1" value="120" oninput="drawRoomPlanThrottled()"></div>
       </div>
+      <p class="hint" id="rpThrowDistance" style="margin-top:6px"></p>
     </div>
 
     <div class="rp-sec">
@@ -864,6 +868,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <p class="hint">Add models manually or import an Excel file with columns: <span class="mono">category, brand, model, price, qty</span>. Qty is units per system (e.g. front speakers = 2 if priced per piece, or 1 if priced per pair).</p>
     <div class="plist-controls" style="margin-top:10px">
       <button class="btn primary" onclick="openItemModal()">+ Add item</button>
+      <button class="btn" onclick="addCustomCategory()">+ Add category</button>
       <button class="btn" onclick="document.getElementById('xlsxFile').click()">⬆ Import Excel</button>
       <input type="file" id="xlsxFile" accept=".xlsx,.xls" style="display:none" onchange="importXLSX(this)">
       <button class="btn" onclick="exportXLSX()">⬇ Export Excel</button>
@@ -995,7 +1000,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <div id="miScreenRow" style="display:none">
         <div class="row">
           <div class="field"><label>Diagonal size (in)</label>
-            <select id="miScreenSize">
+            <select id="miScreenSize" onchange="syncScreenDimsPreview()">
               <option value="">— select —</option>
               <option value="84">84"</option>
               <option value="92">92"</option>
@@ -1014,6 +1019,12 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
               <option value="250">250"</option>
             </select>
           </div>
+          <div class="field"><label>Aspect ratio</label>
+            <select id="miAspectRatio" onchange="syncScreenDimsPreview()">
+              <option value="16:9">16:9 (standard widescreen)</option>
+              <option value="4:3">4:3 (classic)</option>
+            </select>
+          </div>
           <div class="field"><label>Frame type</label>
             <select id="miScreenType">
               <option value="fixed">Fixed frame</option>
@@ -1021,6 +1032,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
             </select>
           </div>
         </div>
+        <p class="hint" id="miScreenDimsPreview" style="margin-top:2px"></p>
         <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:var(--muted)">
           <input type="checkbox" id="miAcousticTransparent" style="width:auto;flex:none">
           Acoustic transparent (AT) — front L/C/R can sit directly behind the screen
@@ -1045,10 +1057,18 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           </select>
         </div>
       </div>
+      <div class="row" id="miThrowRatioRow" style="display:none">
+        <div class="field"><label>Throw ratio min <span class="hint" style="text-transform:none">— from the datasheet</span></label>
+          <input id="miThrowRatioMin" type="number" step="0.01" min="0" placeholder="e.g. 1.35"></div>
+        <div class="field"><label>Throw ratio max</label>
+          <input id="miThrowRatioMax" type="number" step="0.01" min="0" placeholder="e.g. 2.10"></div>
+      </div>
       <div class="mrow" id="miMountRow" style="display:none">
-        <label class="hint">Mounting <span class="hint" style="text-transform:none">— in-ceiling speakers are drawn on the ceiling in the Room Plan, not the wall</span></label>
+        <label class="hint">Mounting <span class="hint" style="text-transform:none">— in-ceiling speakers are drawn on the ceiling in the Room Plan; a bookshelf model used for Atmos duty is still drawn at height, not on the ceiling</span></label>
         <select id="miMountType">
-          <option value="standmount">Standmount / floor</option>
+          <option value="floorstanding">Floor standing</option>
+          <option value="bookshelf">Bookshelf</option>
+          <option value="satellite">Satellite</option>
           <option value="inwall">In-wall</option>
           <option value="inceiling">In-ceiling</option>
         </select>
@@ -1222,17 +1242,17 @@ const DEFAULT_CATS = [
 /* ---------------- sample price list (replace with your real prices) ---------------- */
 const SAMPLE_ITEMS = [
   // projector
-  ['projector','BenQ','TH685i (1080p)',95000,1,,,,'HD','Lamp'],['projector','Epson','EH-TW6250 4K PRO-UHD',135000,1,,,,'4K','Lamp'],
-  ['projector','BenQ','TK700STi 4K',150000,1,,,,'4K','Lamp'],['projector','Optoma','UHD38x',160000,1,,,,'4K','Lamp'],
+  ['projector','BenQ','TH685i (1080p)',95000,1,,,,'HD','Lamp',,,,,,,,,,,,,,,,,,,1.13,1.47],['projector','Epson','EH-TW6250 4K PRO-UHD',135000,1,,,,'4K','Lamp',,,,,,,,,,,,,,,,,,,1.32,2.15],
+  ['projector','BenQ','TK700STi 4K',150000,1,,,,'4K','Lamp',,,,,,,,,,,,,,,,,,,1.15,1.5],['projector','Optoma','UHD38x',160000,1,,,,'4K','Lamp',,,,,,,,,,,,,,,,,,,1.21,1.59],
   ['projector','Epson','EH-TW7100',210000,1,,,,'4K','Lamp'],['projector','BenQ','W2710i',230000,1,,,,'4K','Lamp'],
-  ['projector','Epson','EH-LS11000W Laser',400000,1,,,,'4K','Laser'],['projector','JVC','DLA-NZ500',520000,1,,,,'4K','Laser'],
-  ['projector','Sony','VPL-XW5000ES',620000,1,,,,'4K','Laser'],
+  ['projector','Epson','EH-LS11000W Laser',400000,1,,,,'4K','Laser',,,,,,,,,,,,,,,,,,,1.35,2.84],['projector','JVC','DLA-NZ500',520000,1,,,,'4K','Laser',,,,,,,,,,,,,,,,,,,1.38,2.75],
+  ['projector','Sony','VPL-XW5000ES',620000,1,,,,'4K','Laser',,,,,,,,,,,,,,,,,,,1.35,2.85],
   // screen
   ['screen','Liberty','Grandview Fixed 100"',32000,1,undefined,'fixed',false,undefined,undefined,undefined,100],
   ['screen','Elite Screens','Spectrum Motorised 100"',48000,1,undefined,'motorized',false,undefined,undefined,undefined,100],
   ['screen','Elite Screens','Sable Frame 120"',62000,1,undefined,'fixed',false,undefined,undefined,undefined,120],
   ['screen','Screen Innovations','Fixed ALR 110"',180000,1,undefined,'fixed',false,undefined,undefined,undefined,110],
-  ['screen','Screen Innovations','Slate AT Fixed 120"',245000,1,undefined,'fixed',true,undefined,undefined,undefined,120],
+  ['screen','Screen Innovations','Slate AT Fixed 120"',245000,1,undefined,'fixed',true,undefined,undefined,undefined,120,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'4:3'],
   ['screen','Stewart Filmscreen','StudioTek AT Motorised 130"',385000,1,undefined,'motorized',true,undefined,undefined,undefined,130],
   ['screen','Elite Screens','Sable ALR Fixed 120"',225000,1,undefined,'fixed',false,undefined,undefined,undefined,120,undefined,undefined,undefined,undefined,true],
   // avr
@@ -1247,24 +1267,26 @@ const SAMPLE_ITEMS = [
   ['avr','Marantz','AV20 (13.4ch processing)',799900,1,13,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
   ['avr','Marantz','AV10 (15.4ch processing)',1264000,1,15,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
   // fronts (priced per pair)
-  ['fronts','Wharfedale','Diamond 12.3 (pair)',55000,1],['fronts','Polk','Signature Elite ES60 (pair)',72000,1],
-  ['fronts','Wharfedale','Evo 4.3 (pair)',92000,1],['fronts','Klipsch','RP-6000F II (pair)',98000,1],
-  ['fronts','KEF','Q750 (pair)',115000,1],['fronts','Polk','Reserve R600 (pair)',140000,1],
+  ['fronts','Wharfedale','Diamond 12.3 (pair)',55000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],['fronts','Polk','Signature Elite ES60 (pair)',72000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],
+  ['fronts','Wharfedale','Evo 4.3 (pair)',92000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],['fronts','Klipsch','RP-6000F II (pair)',98000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],
+  ['fronts','KEF','Q750 (pair)',115000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],['fronts','Polk','Reserve R600 (pair)',140000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],
   ['fronts','Sonance','Reference R1 In-Wall (pair)',85000,1,undefined,undefined,undefined,undefined,undefined,'inwall'],
   ['fronts','Origin Acoustics','Composer C63TT In-Wall (pair)',135000,1,undefined,undefined,undefined,undefined,undefined,'inwall'],
   // center
-  ['center','Polk','Signature Elite ES30',20000,1],['center','Wharfedale','Diamond 12.C',18000,1],
-  ['center','Klipsch','RP-404C II',42000,1],['center','KEF','Q650c',48000,1],
+  ['center','Polk','Signature Elite ES30',20000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],['center','Wharfedale','Diamond 12.C',18000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
+  ['center','Klipsch','RP-404C II',42000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],['center','KEF','Q650c',48000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
   ['center','Sonance','Reference R1C In-Wall Center',32000,1,undefined,undefined,undefined,undefined,undefined,'inwall'],
   ['center','Origin Acoustics','Composer C65TT In-Wall Center',52000,1,undefined,undefined,undefined,undefined,undefined,'inwall'],
   // surrounds (pair)
-  ['surrounds','Wharfedale','Diamond 12.1 (pair)',24000,1],['surrounds','Polk','ES15 (pair)',30000,1],
-  ['surrounds','Klipsch','RP-500M II (pair)',46000,1],['surrounds','KEF','Q150 (pair)',52000,1],
+  ['surrounds','Wharfedale','Diamond 12.1 (pair)',24000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],['surrounds','Polk','ES15 (pair)',30000,1,undefined,undefined,undefined,undefined,undefined,'satellite'],
+  ['surrounds','Klipsch','RP-500M II (pair)',46000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],['surrounds','KEF','Q150 (pair)',52000,1,undefined,undefined,undefined,undefined,undefined,'satellite'],
   ['surrounds','Episode','6.5in In-Ceiling (pair)',28000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
   ['surrounds','Sonance','Reference R1CS In-Ceiling (pair)',58000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
   // atmos (pair)
-  ['atmos','Polk','RC80i In-ceiling (pair)',16000,1],['atmos','Klipsch','CDT-5650-C II In-ceiling',24000,2],
-  ['atmos','Polk','ES90 Height Modules (pair)',26000,1],['atmos','Klipsch','RP-500SA II (pair)',42000,1],
+  ['atmos','Polk','RC80i In-ceiling (pair)',16000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
+  ['atmos','Klipsch','CDT-5650-C II In-ceiling',24000,2,undefined,undefined,undefined,undefined,undefined,'inceiling'],
+  ['atmos','Polk','ES90 Height Modules (pair)',26000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
+  ['atmos','Klipsch','RP-500SA II (pair)',42000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
   // sub
   ['sub','Polk','HTS-10',34000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',10],
   ['sub','Klipsch','R-121SW',42000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',12],
@@ -1526,12 +1548,15 @@ function mkItem(a){ return {id:'i'+(++uid), cat:a[0], brand:a[1], model:a[2], pr
   screenType:a[6]||null, acousticTransparent:!!a[7], resolution:a[8]||null, lightSource:a[9]||null, mountType:a[10]||null, screenSize:a[11]||null,
   cableLength:a[12]||null, cableGauge:a[13]||null, panelType:a[14]||null, avrType:a[15]||null, ambientLightRejecting:!!a[16],
   hdmiLength:a[17]||null, hdmiSpec:a[18]||null, tvSize:a[19]||null, subType:a[20]||null, subDriverSize:a[21]||null, variant:a[22]||null,
-  marginPct:a[23]!=null?+a[23]:0, taxInclusive:a[24]!=null?!!a[24]:true, gstRate:a[25]!=null?+a[25]:null, preoutChannels:a[26]!=null?+a[26]:null}; }
+  marginPct:a[23]!=null?+a[23]:0, taxInclusive:a[24]!=null?!!a[24]:true, gstRate:a[25]!=null?+a[25]:null, preoutChannels:a[26]!=null?+a[26]:null,
+  aspectRatio:a[27]||null, throwRatioMin:a[28]!=null?+a[28]:null, throwRatioMax:a[29]!=null?+a[29]:null}; }
 // Categories with a rich structured attribute already (channels, screen fields, mounting, cable
 // gauge, etc) don't need the generic Variant field — everyone else gets it, so nothing is left
 // with genuinely no sub-type/size field at all.
 const NO_VARIANT_FIELD_CATS = ['avr','poweramp','screen','projector','spkcable','hdmi','fronts','center','surrounds'];
-const MOUNT_CATS = ['fronts','center','surrounds']; // speaker categories that support in-wall/in-ceiling mounting
+const MOUNT_CATS = ['fronts','center','surrounds','atmos']; // speaker categories that support mount-type selection — Atmos included since it's sometimes run off a bookshelf speaker instead of a true in-ceiling unit
+const ARCHITECTURAL_MOUNTS = ['inwall','inceiling']; // built into the wall/ceiling — everything else (floorstanding/bookshelf/satellite, or legacy 'standmount' data) counts as a standard, visible speaker
+const MOUNT_LABELS = {floorstanding:'floor standing', bookshelf:'bookshelf', satellite:'satellite', inwall:'in-wall', inceiling:'in-ceiling', standmount:'standmount / floor'};
 let items = store.get('bf_items');
 if(!items){ items = SAMPLE_ITEMS.map(mkItem); store.set('bf_items', items); store.set('bf_uid', uid); }
 else if(!items.some(i=>i.cat==='htib')){
@@ -1612,6 +1637,12 @@ else if(!items.some(i=>i.cat==='htib')){
     SAMPLE_ITEMS.filter(a=>a[0]==='poweramp' && a[5]>=11).forEach(a=> items.push(mkItem(a)));
     touched = true;
   }
+  // 'standmount' used to be one catch-all value covering floor standing, bookshelf, and satellite
+  // speakers together — now that those are separate options, migrate old data to 'bookshelf' as a
+  // reasonable default rather than leave it pointing at a value that no longer exists in the UI.
+  items.forEach(i=>{
+    if(MOUNT_CATS.includes(i.cat) && i.mountType==='standmount'){ i.mountType='bookshelf'; touched=true; }
+  });
   if(touched) store.set('bf_items', items);
 }
 let quote = store.get('bf_quote') || null;   // {selections:{catId:itemId}, locked:{catId:true}, discount:number, budget:number, client:string}
@@ -1803,25 +1834,70 @@ function toggleWeights(){
   btn.innerHTML = (show?'Hide':'Show') + ' <span class="chev">▾</span>';
 }
 const SPEAKER_CATS = ['fronts','center','surrounds','atmos','sub','htib'];
+// Built-in categories are protected from rename/delete — their IDs are hardcoded throughout the
+// app (multFor, catAllowed, MOUNT_CATS, HTIB_ALWAYS_REPLACES, etc.), so removing one would break
+// real logic, not just tidy up a list. Only categories that don't appear in DEFAULT_CATS — created
+// by hand, or by accident when an import's category text didn't match anything known — are custom.
+function isCustomCategory(catId){ return !DEFAULT_CATS.some(c=>c.id===catId); }
 function renderWeights(){
   const tb=document.getElementById('wtTable'); tb.innerHTML='';
   cats.forEach((c,i)=>{
     const brands = brandsInCat(c.id);
     const locked = !!c.brandPref;
+    const custom = isCustomCategory(c.id);
     const tr=document.createElement('tr');
     tr.innerHTML = `
       <td style="width:44px"><label class="switch cat-switch"><input type="checkbox" ${c.enabled?'checked':''} onchange="cats[${i}].enabled=this.checked;persistCats()"><span class="slider-sw"></span></label></td>
       <td>
-        <div>${c.name} <span class="hint mono">(${catItems(c.id).length} models)</span>${locked?' <span class="brand-lock-dot" title="Brand locked to '+c.brandPref+'"></span>':''}</div>
+        <div>${custom
+          ? `<input class="cat-name-input" value="${c.name.replace(/"/g,'&quot;')}" onchange="renameCategory(${i},this.value)" style="font-size:13px;padding:4px 6px;width:auto;display:inline-block">`
+          : c.name
+        } <span class="hint mono">(${catItems(c.id).length} models)</span>${locked?' <span class="brand-lock-dot" title="Brand locked to '+c.brandPref+'"></span>':''}${custom?' <span class="hint" style="color:var(--muted)">· custom</span>':''}</div>
         <select class="brand-pref-select" onchange="setBrandPref(${i}, this.value)" ${brands.length?'':'disabled'}>
           <option value="">Any brand</option>
           ${brands.map(b=>`<option value="${b}" ${c.brandPref===b?'selected':''}>${b} only</option>`).join('')}
         </select>
       </td>
-      <td><input class="weight-input" type="number" min="0" value="${c.weight}" onchange="cats[${i}].weight=+this.value||0;persistCats()"></td>`;
+      <td><input class="weight-input" type="number" min="0" value="${c.weight}" onchange="cats[${i}].weight=+this.value||0;persistCats()"></td>
+      <td style="width:36px">${custom ? `<button class="btn sm danger ghost" style="padding:5px 8px" title="Delete this category" onclick="deleteCategory('${c.id}')">✕</button>` : ''}</td>`;
     tb.appendChild(tr);
   });
   renderQuickSpeakerBrand();
+}
+function renameCategory(i, newName){
+  const name = newName.trim();
+  if(!name){ renderWeights(); return; } // revert visually if cleared to empty
+  cats[i].name = name;
+  persistCats();
+}
+function deleteCategory(catId){
+  if(!isCustomCategory(catId)){ toast('Built-in categories can\'t be deleted'); return; }
+  const cat = cats.find(c=>c.id===catId);
+  const itemCount = catItems(catId).length;
+  const warn = itemCount>0
+    ? `Delete "${cat.name}"? This also deletes ${itemCount} price list item${itemCount>1?'s':''} in it. This cannot be undone.`
+    : `Delete "${cat.name}"? This cannot be undone.`;
+  customConfirm(warn, ()=>{
+    items = items.filter(i=>i.cat!==catId);
+    store.set('bf_items', items);
+    cats = cats.filter(c=>c.id!==catId);
+    persistCats();
+    renderPlist();
+    if(typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
+    toast('Category deleted');
+  }, 'Yes, delete');
+}
+// Auto-generates an id the same way the import path does for unrecognised category text, so a
+// category added here and one accidentally created by import land on the same convention.
+function addCustomCategory(){
+  const name = (prompt('New category name:')||'').trim();
+  if(!name) return;
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'');
+  if(!id){ toast('That name has no usable characters — try including letters or numbers'); return; }
+  if(cats.some(c=>c.id===id)){ toast('A category with that name already exists'); return; }
+  cats.push({id, name, weight:3, enabled:true});
+  persistCats();
+  toast('Category added');
 }
 function renderQuickSpeakerBrand(){
   const sel = document.getElementById('quickSpeakerBrand');
@@ -2065,7 +2141,7 @@ function renderCategoryAttributesUI(){
     row('Front L/R Speakers', chips('caStyleF',"setSpeakerStyle(this)",[['','Any'],['standard','Standard'],['architectural','Architectural']],speakerStylePref,'Style')),
     row('Center Speaker', `<div class="hint">Uses the same Style control as Front L/R above</div>`),
     row('Surround Speakers', `<div class="hint">Uses the same Style control as Front L/R above</div>`),
-    row('Atmos / Height Speakers', `<div class="hint">Always ceiling-mounted by design — no filter needed</div>`),
+    row('Atmos / Height Speakers', `<div class="hint">Uses the same Style control as Front L/R above — set a bookshelf model here and Architectural won't pick it, since it isn't in-wall/in-ceiling</div>`),
     row('Subwoofer', chips('caSubType',"setMoreFilterPref('subType',this.dataset.val)",[['','Any'],['Powered','Powered'],['Passive','Passive']],moreFilterPrefs.subType,'Type')),
     row('Media Player / Source', chips('caSource',"setVariantPref('source',this.dataset.val)",dynamicOptions('source'),variantPrefs.source,'Type')),
     row('Speaker Cabling (lot)',
@@ -2274,7 +2350,7 @@ function catItemsForSpeaker(catId){
   if(!MOUNT_CATS.includes(catId) || !speakerStylePref) return all;
   let opts = all;
   if(speakerStylePref==='architectural') opts = all.filter(it=> it.mountType==='inwall' || it.mountType==='inceiling');
-  if(speakerStylePref==='standard') opts = all.filter(it=> !it.mountType || it.mountType==='standmount');
+  if(speakerStylePref==='standard') opts = all.filter(it=> !it.mountType || !ARCHITECTURAL_MOUNTS.includes(it.mountType));
   return opts.length ? opts : all;
 }
 function checkSpeakerStyleFallback(sel){
@@ -2526,11 +2602,14 @@ function generateVariants(){
   const ch = currentChannel();
   const htibMode = document.getElementById('systemType').value === 'htib';
   const baseTiers = [
-    { key:'budget',   label:'Budget',   factor:0.75, htib:htibMode },
-    { key:'balanced', label:'Balanced', factor:1.00, htib:htibMode },
-    { key:'premium',  label:'Premium',  factor:1.30, htib:htibMode },
+    { key:'essential', label:'Essential', factor:0.60, htib:htibMode },
+    { key:'budget',    label:'Budget',    factor:0.75, htib:htibMode },
+    { key:'balanced',  label:'Balanced',  factor:1.00, htib:htibMode },
+    { key:'premium',   label:'Premium',   factor:1.30, htib:htibMode },
+    { key:'flagship',  label:'Flagship',  factor:1.65, htib:htibMode },
   ];
-  // If building component systems, also offer an all-in-one HTiB at the budget tier as a cheaper option.
+  // If building component systems, also offer an all-in-one HTiB at the budget tier as a cheaper
+  // option — a 6th when it applies, on top of the 5 guaranteed component tiers above.
   const tiers = htibMode ? baseTiers
     : [ { key:'htib', label:'HTiB (all-in-one)', factor:0.65, htib:true }, ...baseTiers ];
 
@@ -3486,6 +3565,13 @@ function buildSpeakerPositionPDFPage(doc, plan){
     doc.text(`${Math.hypot(m.x-plan.seat.x, m.y-plan.seat.y).toFixed(1)} ft`, cols[2], ry);
     doc.text(m.cableFt!=null?`${m.cableFt} ft`:'—', cols[3], ry);
     ry += 7;
+    if(m.note){
+      doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+      const wrapped = doc.splitTextToSize(m.note, pageW-margin*2-8);
+      doc.text(wrapped, margin+4, ry-2);
+      ry += wrapped.length*3.6 + 2;
+      doc.setFont('helvetica','normal');
+    }
     doc.setDrawColor(230,230,230); doc.setLineWidth(0.15);
     doc.line(margin, ry-3, pageW-margin, ry-3);
   });
@@ -3705,11 +3791,11 @@ function itemAttrTag(it){
   if(it.cat==='avr') return (avrChannels(it) ? ` · ${avrChannels(it)}ch` : ' · channels not set') + (it.preoutChannels ? ` (pre-out to ${it.preoutChannels}ch)` : '') + (it.avrType==='processor' ? ' · Processor (needs power amp)' : '');
   if(it.cat==='poweramp') return avrChannels(it) ? ` · ${avrChannels(it)}ch` : '';
   if(it.cat==='screen') return ` · ${it.screenSize?it.screenSize+'"':'size not set'} · ${it.screenType==='motorized'?'motorised':'fixed frame'}${it.acousticTransparent?' · AT':''}${it.ambientLightRejecting?' · ALR':''}`;
-  if(it.cat==='projector') return ` · ${it.resolution||'HD'} ${it.lightSource||'Lamp'}`;
+  if(it.cat==='projector') return ` · ${it.resolution||'HD'} ${it.lightSource||'Lamp'}${(it.throwRatioMin!=null&&it.throwRatioMax!=null)?` · throw ${it.throwRatioMin}–${it.throwRatioMax}`:''}`;
   if(it.cat==='spkcable' && (it.cableLength||it.cableGauge)) return ` · ${it.cableLength?it.cableLength+'m':''}${it.cableLength&&it.cableGauge?', ':''}${it.cableGauge?it.cableGauge+' sqmm':''}`;
   if(it.cat==='hdmi' && (it.hdmiLength||it.hdmiSpec)) return ` · ${it.hdmiLength?it.hdmiLength+'m':''}${it.hdmiSpec?' · '+it.hdmiSpec:''}`;
   if(it.cat==='sub' && (it.subType||it.subDriverSize)) return ` · ${it.subType||'Powered'}${it.subDriverSize?' · '+it.subDriverSize+'"':''}`;
-  if(MOUNT_CATS.includes(it.cat) && it.mountType && it.mountType!=='standmount') return ` · ${it.mountType==='inceiling'?'in-ceiling':'in-wall'}`;
+  if(MOUNT_CATS.includes(it.cat) && it.mountType) return ` · ${MOUNT_LABELS[it.mountType]||it.mountType}`;
   if(it.variant) return ` · ${it.variant}`;
   return '';
 }
@@ -3722,7 +3808,7 @@ function itemAttrParen(it){
   if(it.cat==='spkcable' && (it.cableLength||it.cableGauge)) return ` (${it.cableLength?it.cableLength+'m':''}${it.cableLength&&it.cableGauge?', ':''}${it.cableGauge?it.cableGauge+' sqmm':''})`;
   if(it.cat==='hdmi' && (it.hdmiLength||it.hdmiSpec)) return ` (${it.hdmiLength?it.hdmiLength+'m':''}${it.hdmiSpec?', '+it.hdmiSpec:''})`;
   if(it.cat==='sub' && (it.subType||it.subDriverSize)) return ` (${it.subType||'Powered'}${it.subDriverSize?', '+it.subDriverSize+'"':''})`;
-  if(MOUNT_CATS.includes(it.cat) && it.mountType && it.mountType!=='standmount') return ` (${it.mountType==='inceiling'?'In-ceiling':'In-wall'})`;
+  if(MOUNT_CATS.includes(it.cat) && it.mountType) return ` (${MOUNT_LABELS[it.mountType]||it.mountType})`;
   if(it.variant) return ` (${it.variant})`;
   return '';
 }
@@ -3750,10 +3836,13 @@ function renderPlist(){
   const box=document.getElementById('plistBox'); box.innerHTML='';
   cats.forEach(c=>{
     const list=catItems(c.id);
+    const custom = isCustomCategory(c.id);
     const g=document.createElement('div'); g.className='cat-group';
     g.innerHTML = `
       <div class="cat-head" onclick="this.parentElement.classList.toggle('open')">
-        <span class="cat-icon">${catIcon(c.id)}</span><h3>${c.name}</h3><span class="cnt">${list.length} models</span><span style="color:var(--faint)">▾</span>
+        <span class="cat-icon">${catIcon(c.id)}</span><h3>${c.name}${custom?' <span class="hint" style="text-transform:none;font-weight:400">· custom</span>':''}</h3><span class="cnt">${list.length} models</span>
+        ${custom?`<button class="btn sm danger ghost" style="margin-left:6px;padding:4px 8px" title="Delete this category" onclick="event.stopPropagation();deleteCategory('${c.id}')">✕</button>`:''}
+        <span style="color:var(--faint)">▾</span>
       </div>
       <div class="cat-body">
         ${list.length? list.map(it=>`
@@ -3784,6 +3873,17 @@ function syncScreenSizeOptions(currentSize){
     opt.value = currentSize; opt.textContent = currentSize+'" (existing)'; opt.setAttribute('data-custom','1');
     sel.appendChild(opt);
   }
+}
+// The small text the diagonal/aspect ratio dropdowns are missing on their own — actual viewable
+// image width and height, updated live as either dropdown changes.
+function syncScreenDimsPreview(){
+  const diag = +document.getElementById('miScreenSize').value || 0;
+  const aspect = document.getElementById('miAspectRatio').value;
+  const el = document.getElementById('miScreenDimsPreview');
+  if(!el) return;
+  if(!diag){ el.textContent = ''; return; }
+  const d = screenDimsFromDiagonal(diag, aspect);
+  el.textContent = `Image size: ${d.widthInches.toFixed(1)}" wide × ${d.heightInches.toFixed(1)}" tall (${(d.widthInches/12).toFixed(1)}ft × ${(d.heightInches/12).toFixed(1)}ft)`;
 }
 // Swaps the explanatory line under the Tax Inclusive switch so it always states plainly what
 // the current position means, rather than making the installer infer it from the toggle alone.
@@ -3818,10 +3918,14 @@ function openItemModal(id){
     document.getElementById('miScreenType').value=it.screenType||'fixed';
     syncScreenSizeOptions(it.screenSize);
     document.getElementById('miScreenSize').value=it.screenSize||'';
+    document.getElementById('miAspectRatio').value=it.aspectRatio||'16:9';
+    syncScreenDimsPreview();
     document.getElementById('miAcousticTransparent').checked=!!it.acousticTransparent;
     document.getElementById('miResolution').value=it.resolution||'HD';
     document.getElementById('miLightSource').value=it.lightSource||'Lamp';
-    document.getElementById('miMountType').value=it.mountType||'standmount';
+    document.getElementById('miThrowRatioMin').value=it.throwRatioMin!=null?it.throwRatioMin:'';
+    document.getElementById('miThrowRatioMax').value=it.throwRatioMax!=null?it.throwRatioMax:'';
+    document.getElementById('miMountType').value=it.mountType||'bookshelf';
     document.getElementById('miAvrType').value=it.avrType||'receiver';
     document.getElementById('miALR').checked=!!it.ambientLightRejecting;
     document.getElementById('miCableLength').value=it.cableLength||'';
@@ -3846,10 +3950,14 @@ function openItemModal(id){
     document.getElementById('miScreenType').value='fixed';
     syncScreenSizeOptions(null);
     document.getElementById('miScreenSize').value='';
+    document.getElementById('miAspectRatio').value='16:9';
+    syncScreenDimsPreview();
     document.getElementById('miAcousticTransparent').checked=false;
     document.getElementById('miResolution').value='HD';
     document.getElementById('miLightSource').value='Lamp';
-    document.getElementById('miMountType').value='standmount';
+    document.getElementById('miThrowRatioMin').value='';
+    document.getElementById('miThrowRatioMax').value='';
+    document.getElementById('miMountType').value='bookshelf';
     document.getElementById('miAvrType').value='receiver';
     document.getElementById('miALR').checked=false;
     document.getElementById('miCableLength').value='';
@@ -3875,6 +3983,7 @@ function syncCategoryFieldsVisibility(){
     : '— how many channels this amp drives (reference only, not used for allocation)';
   document.getElementById('miScreenRow').style.display = cat==='screen' ? 'block' : 'none';
   document.getElementById('miProjectorRow').style.display = cat==='projector' ? 'flex' : 'none';
+  document.getElementById('miThrowRatioRow').style.display = cat==='projector' ? 'flex' : 'none';
   document.getElementById('miMountRow').style.display = MOUNT_CATS.includes(cat) ? 'block' : 'none';
   document.getElementById('miAvrTypeRow').style.display = cat==='avr' ? 'block' : 'none';
   document.getElementById('miCableRow').style.display = cat==='spkcable' ? 'flex' : 'none';
@@ -3917,6 +4026,9 @@ function saveItem(){
   const gstRate=gstRateVal===''?null:+gstRateVal;
   const channels=(cat==='avr'||cat==='poweramp') ? (+document.getElementById('miChannels').value||null) : null;
   const preoutChannels=cat==='avr' ? (+document.getElementById('miPreoutChannels').value||null) : null;
+  const aspectRatio=cat==='screen' ? document.getElementById('miAspectRatio').value : null;
+  const throwRatioMin=cat==='projector' ? (+document.getElementById('miThrowRatioMin').value||null) : null;
+  const throwRatioMax=cat==='projector' ? (+document.getElementById('miThrowRatioMax').value||null) : null;
   const screenType=cat==='screen' ? document.getElementById('miScreenType').value : null;
   const acousticTransparent=cat==='screen' ? document.getElementById('miAcousticTransparent').checked : false;
   const ambientLightRejecting=cat==='screen' ? document.getElementById('miALR').checked : false;
@@ -3934,7 +4046,7 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
@@ -3984,8 +4096,8 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant']];
-  items.forEach(i=> rows.push([i.cat, i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'']));
+  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant']];
+  items.forEach(i=> rows.push([i.cat, i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -4053,6 +4165,7 @@ function importXLSX(inp){
         screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), specs:head.indexOf('specs'),
         avrtype:head.indexOf('avrtype'), alr:head.indexOf('ambientlightrejecting'), paneltype:head.indexOf('paneltype'),
         marginpct:head.indexOf('marginpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
+        aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
         cablelength:head.indexOf('cablelength'), cablegauge:head.indexOf('cablegauge'),
         hdmilength:head.indexOf('hdmilength'), hdmispec:head.indexOf('hdmispec'), tvsize:head.indexOf('tvsize'),
         subtype:head.indexOf('subtype'), subdriversize:head.indexOf('subdriversize'), variant:head.indexOf('variant')};
@@ -4133,11 +4246,17 @@ function importNativeRows(rows, ix, inp){
     const taxInclusive = ix.taxinclusive>=0 && r[ix.taxinclusive] ? !/^(no|false|0|excl)/i.test(String(r[ix.taxinclusive])) : null;
     const gstRateImp = ix.gstrate>=0 && r[ix.gstrate]!=='' && r[ix.gstrate]!=null ? (+r[ix.gstrate]||null) : null;
     const preoutChannelsImp = ix.preoutchannels>=0 && r[ix.preoutchannels]!=='' && r[ix.preoutchannels]!=null ? (+r[ix.preoutchannels]||null) : null;
+    const aspectRatioImp = ix.aspectratio>=0 && r[ix.aspectratio] ? String(r[ix.aspectratio]).trim() : null;
+    const throwRatioMinImp = ix.throwratiomin>=0 && r[ix.throwratiomin]!=='' && r[ix.throwratiomin]!=null ? (+r[ix.throwratiomin]||null) : null;
+    const throwRatioMaxImp = ix.throwratiomax>=0 && r[ix.throwratiomax]!=='' && r[ix.throwratiomax]!=null ? (+r[ix.throwratiomax]||null) : null;
     const existing = findExistingItem(cid, brand, model);
     if(existing){
       existing.price=price; existing.qty=qty;
       if(channels!=null) existing.channels=channels;
       if(preoutChannelsImp!=null) existing.preoutChannels=preoutChannelsImp;
+      if(aspectRatioImp) existing.aspectRatio=aspectRatioImp;
+      if(throwRatioMinImp!=null) existing.throwRatioMin=throwRatioMinImp;
+      if(throwRatioMaxImp!=null) existing.throwRatioMax=throwRatioMaxImp;
       if(screenType) existing.screenType=screenType;
       if(ix.at>=0) existing.acousticTransparent=acousticTransparent;
       if(resolution) existing.resolution=resolution;
@@ -4159,7 +4278,7 @@ function importNativeRows(rows, ix, inp){
       if(gstRateImp!=null) existing.gstRate=gstRateImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
@@ -4336,6 +4455,23 @@ function castToWall(seat, aDeg, W, L, margin){
 // Builds every marker + equipment entry for the plan. When a quote exists, it's driven entirely
 // by that quote's actual selections (via computeQuoteTotals) so the plan always matches what was
 // quoted; otherwise it falls back to a generic reference layout for the chosen channel config.
+// Width/height of the actual VIEWABLE image from its diagonal + aspect ratio — Pythagorean, works
+// for any "W:H" string, not just 16:9. This is the image size, not the outer frame/bezel — throw
+// distance math is based on the image, so border width never enters this calculation.
+function screenDimsFromDiagonal(diagIn, aspectStr){
+  const parts = String(aspectStr||'16:9').split(':').map(Number);
+  const rw = parts[0]>0 ? parts[0] : 16, rh = parts[1]>0 ? parts[1] : 9;
+  const ratio = rw/rh;
+  const heightIn = diagIn / Math.sqrt(ratio*ratio + 1);
+  const widthIn = heightIn * ratio;
+  return { widthInches: widthIn, heightInches: heightIn };
+}
+// Throw distance = image width × throw ratio. Most projectors publish a min/max ratio for their
+// zoom range — this returns the full distance range the unit can be placed within for this image.
+function throwDistanceRange(widthInches, throwRatioMin, throwRatioMax){
+  if(throwRatioMin==null || throwRatioMax==null) return null;
+  return { minInches: widthInches*throwRatioMin, maxInches: widthInches*throwRatioMax };
+}
 function computeRoomPlan(){
   const W = Math.max(6, +document.getElementById('clientRoomWidth').value||14);
   const L = Math.max(8, +document.getElementById('clientRoomLength').value||20);
@@ -4408,7 +4544,7 @@ function computeRoomPlan(){
   // reads straight from the selected item, so the drawing always matches what's actually quoted.
   const mountExtra = catId => {
     const it = useQuote ? items.find(i=>i.id===quote.selections[catId]) : null;
-    if(!it || !it.mountType || it.mountType==='standmount') return {};
+    if(!it || !it.mountType || !ARCHITECTURAL_MOUNTS.includes(it.mountType)) return {};
     if(it.mountType==='inceiling') return {ceiling:true, mountNote:'in-ceiling'};
     return {mountNote:'in-wall'};
   };
@@ -4469,31 +4605,48 @@ function computeRoomPlan(){
     addM('SR'+p, `${posWord}Right Surround Speaker`+tag, {x:bR.x,y:clampY(bR.y+(useRear?stagger:-stagger))}, surrH, Object.assign({angle:a, kind:'speaker'}, survMount));
   }
 
-  // atmos ceiling pairs — count from the quote's own multiplier. Position driven by the elevation
-  // angle slider: Dolby specifies overhead speakers by elevation angle (from the MLP's horizontal
-  // plane), not a fixed offset — steeper elevation (closer to overhead) means less fore/aft offset.
+  // atmos — position depends on how this specific item is actually mounted. A true in-ceiling
+  // speaker uses Dolby's elevation-angle math (steeper elevation = less fore/aft offset from the
+  // MLP). A bookshelf/floorstanding/satellite unit run for Atmos duty isn't on the ceiling at all
+  // — the common real technique is stacking it on top of the front (and rear) speaker positions,
+  // angled upward, so it gets positioned there instead, at a real height rather than the ceiling.
   const atmosLine = lineFor('atmos');
+  const atmosItem = useQuote ? items.find(i=>i.id===quote.selections.atmos) : null;
+  const atmosCeilingMounted = !atmosItem || !atmosItem.mountType || atmosItem.mountType==='inceiling';
   const atmosPairs = useQuote ? (atmosLine ? Math.max(1,Math.round(atmosLine.mult||1)) : 0)
                                : rpChannelParts(cfgId).atmosPairs;
   const atmosDrop = H - earH;
   const atmosOffRaw = atmosDrop / Math.tan(ang.atmosElev*Math.PI/180);
   const atmosOff = Math.max(0.5, Math.min(L/2-0.5, atmosOffRaw));
   const atmosSide = Math.min(W/2-1, 3);
+  const atmosH = atmosCeilingMounted ? H : Math.min(H-1, 7.5);
+  const atmosMountTag = atmosCeilingMounted ? 'Ceiling Speaker' : `Atmos Speaker — stacked on the ${atmosItem.mountType==='floorstanding'?'floorstander':'speaker'} below, angled up`;
   if(atmosPairs>=1){
-    addM('TFL','Front Left Ceiling Speaker (Dolby Atmos)'+(brandLabel('atmos')?' — '+brandLabel('atmos'):''), {x:-atmosSide,y:seat.y-atmosOff}, H, {ceiling:true, kind:'speaker', angle:ang.atmosElev});
-    addM('TFR','Front Right Ceiling Speaker (Dolby Atmos)', {x: atmosSide,y:seat.y-atmosOff}, H, {ceiling:true, kind:'speaker', angle:ang.atmosElev});
+    addM('TFL',`Front Left ${atmosMountTag} (Dolby Atmos)`+(brandLabel('atmos')?' — '+brandLabel('atmos'):''), {x:-atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
+    addM('TFR',`Front Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
   }
   if(atmosPairs>=2){
-    addM('TRL','Rear Left Ceiling Speaker (Dolby Atmos)', {x:-atmosSide,y:seat.y+atmosOff}, H, {ceiling:true, kind:'speaker', angle:ang.atmosElev});
-    addM('TRR','Rear Right Ceiling Speaker (Dolby Atmos)', {x: atmosSide,y:seat.y+atmosOff}, H, {ceiling:true, kind:'speaker', angle:ang.atmosElev});
+    addM('TRL',`Rear Left ${atmosMountTag} (Dolby Atmos)`, {x:-atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
+    addM('TRR',`Rear Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
   }
 
-  // projector — ceiling mounted along the centreline; ~65% of the way from screen to MLP is a
-  // reasonable default mounting zone for most standard-throw lenses (confirm exact throw on site)
+  // projector — mounted along the centreline, at the REAL throw distance for the selected
+  // projector + screen (the screen's actual aspect ratio, not the drawing's fixed 16:9 shorthand)
+  // — this is the number an electrician needs to actually drill the ceiling mount, not a guess.
   if(!useQuote || isPresent('projector')){
     const projItem = useQuote ? items.find(i=>i.id===quote.selections.projector) : null;
+    const screenItem = useQuote ? items.find(i=>i.id===quote.selections.screen) : null;
     const projTag = projItem ? ` (${projItem.resolution||'HD'} ${projItem.lightSource||'Lamp'})` : '';
-    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:seat.y*0.65}, H, {ceiling:true, kind:'video', note:'approx. — confirm exact throw distance from lens spec'});
+    let projY = seat.y*0.65;
+    let projNote = "approx. — add this projector's throw ratio in Price List for an exact mount point";
+    if(projItem && projItem.throwRatioMin!=null && projItem.throwRatioMax!=null){
+      const realDims = screenDimsFromDiagonal(screenIn, (screenItem&&screenItem.aspectRatio)||'16:9');
+      const range = throwDistanceRange(realDims.widthInches, projItem.throwRatioMin, projItem.throwRatioMax);
+      const midFt = ((range.minInches+range.maxInches)/2)/12;
+      projY = midFt;
+      projNote = `Mount ${midFt.toFixed(1)}ft from the screen wall, centred left-right. Throw range for this lens: ${(range.minInches/12).toFixed(1)}–${(range.maxInches/12).toFixed(1)}ft — anywhere in that band works, zoom to fit.`;
+    }
+    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, H, {ceiling:true, kind:'video', note:projNote});
   }
 
   // acoustic treatment — first-reflection zones on the side walls, roughly midway between the
@@ -4558,6 +4711,39 @@ function drawRoomPlan(){
   fb.innerHTML = plan.meetsStandard
     ? `✓ ${plan.viewAngle.toFixed(0)}° — meets ${plan.standard.label} ${plan.standard.min}° min`
     : `⚠ ${plan.viewAngle.toFixed(0)}° — below ${plan.standard.label} ${plan.standard.min}° min`;
+
+  // Throw distance for whichever projector is actually in the quote, against this room's depth —
+  // uses the screen's real aspect ratio (not the drawing's fixed 16:9 shorthand), since throw
+  // math genuinely changes with image shape.
+  const throwEl = document.getElementById('rpThrowDistance');
+  if(throwEl){
+    const diagIn = +document.getElementById('rpScreen').value || 0;
+    const projId = quote && quote.selections && quote.selections.projector;
+    const proj = projId ? items.find(i=>i.id===projId) : null;
+    const screenId = quote && quote.selections && quote.selections.screen;
+    const screenItem = screenId ? items.find(i=>i.id===screenId) : null;
+    if(!diagIn){
+      throwEl.textContent = '';
+    } else {
+      const dims = screenDimsFromDiagonal(diagIn, (screenItem&&screenItem.aspectRatio)||'16:9');
+      let text = `Image: ${dims.widthInches.toFixed(1)}" W × ${dims.heightInches.toFixed(1)}" H`;
+      let warn = false;
+      if(!proj){
+        text += ' — no projector in quote yet';
+      } else if(proj.throwRatioMin==null || proj.throwRatioMax==null){
+        text += ` · ${proj.brand} ${proj.model}: throw ratio not set in Price List`;
+      } else {
+        const range = throwDistanceRange(dims.widthInches, proj.throwRatioMin, proj.throwRatioMax);
+        const minFt = range.minInches/12, maxFt = range.maxInches/12;
+        text += ` · Throw distance ${minFt.toFixed(1)}–${maxFt.toFixed(1)}ft`;
+        if(L < minFt){ text += ` ⚠ room is only ${L.toFixed(1)}ft deep — too shallow for this projector`; warn = true; }
+        else if(L > maxFt){ text += ` ⚠ room is ${L.toFixed(1)}ft deep — projector would sit mid-room, not at the back wall`; warn = true; }
+        else { text += ` ✓ fits a ${L.toFixed(1)}ft deep room`; }
+      }
+      throwEl.textContent = text;
+      throwEl.style.color = warn ? 'var(--red)' : '';
+    }
+  }
 
   const pxPerFt = Math.min(42, Math.max(20, 520/Math.max(W,L)));
   const roomW = W*pxPerFt, roomL = L*pxPerFt;
@@ -4768,7 +4954,7 @@ function renderRoomPlanTable(plan){
       <td class="r">${distFt(m).toFixed(1)} ft</td>
       <td class="r">${m.ceiling? plan.H.toFixed(1) : m.h.toFixed(1)} ft</td>
       <td class="r">${m.cableFt!=null ? m.cableFt+' ft' : '—'}</td>
-    </tr>`).join('');
+    </tr>${m.note ? `<tr><td colspan="5" class="hint" style="padding-top:0;padding-bottom:8px">↳ ${m.note}</td></tr>` : ''}`).join('');
   const totalCable = plan.markers.reduce((s,m)=>s+(m.cableFt||0),0);
   const keyMeasurements = computeKeyMeasurements(plan);
   const measurementsHtml = keyMeasurements.length ? `
