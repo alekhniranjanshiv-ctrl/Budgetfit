@@ -765,6 +765,12 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         <div class="field"><label>Diagonal (in) <span class="hint" style="text-transform:none">— auto from quote</span></label><input id="rpScreen" type="number" step="1" value="120" oninput="drawRoomPlanThrottled()"></div>
       </div>
       <p class="hint" id="rpThrowDistance" style="margin-top:6px"></p>
+      <div id="rpThrowSliderWrap" style="display:none;margin-top:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+          <span id="rpThrowMinLabel"></span><span>Mount distance <b id="rpThrowVal"></b></span><span id="rpThrowMaxLabel"></span>
+        </div>
+        <input id="rpThrowSlider" type="range" step="0.1" oninput="onThrowSliderInput()" style="width:100%">
+      </div>
     </div>
 
     <div class="rp-sec">
@@ -799,6 +805,13 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </div>
       </div>
       <div id="rpAngleFeedback" class="rp-angle-feedback"></div>
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+          <span>Narrower</span><span>Atmos separation <b id="rpAtmosSepVal"></b></span><span>Wider</span>
+        </div>
+        <input id="rpAtmosSep" type="range" min="2" max="8" step="0.25" value="" oninput="onAtmosSepInput()" style="width:100%" aria-label="Atmos speaker left-right separation">
+        <p class="hint" style="margin-top:3px">Distance each Atmos speaker sits from the room's centreline — the fixed default was capping this too tight regardless of room width.</p>
+      </div>
     </div>
 
     <div class="rp-sec">
@@ -1059,10 +1072,11 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       </div>
       <div class="row" id="miThrowRatioRow" style="display:none">
         <div class="field"><label>Throw ratio min <span class="hint" style="text-transform:none">— from the datasheet</span></label>
-          <input id="miThrowRatioMin" type="number" step="0.01" min="0" placeholder="e.g. 1.35"></div>
+          <input id="miThrowRatioMin" type="number" step="0.01" min="0" placeholder="e.g. 1.35" oninput="syncZoomRatioPreview()"></div>
         <div class="field"><label>Throw ratio max</label>
-          <input id="miThrowRatioMax" type="number" step="0.01" min="0" placeholder="e.g. 2.10"></div>
+          <input id="miThrowRatioMax" type="number" step="0.01" min="0" placeholder="e.g. 2.10" oninput="syncZoomRatioPreview()"></div>
       </div>
+      <p class="hint" id="miZoomRatioPreview" style="margin-top:-6px;margin-bottom:8px"></p>
       <div class="mrow" id="miMountRow" style="display:none">
         <label class="hint">Mounting <span class="hint" style="text-transform:none">— in-ceiling speakers are drawn on the ceiling in the Room Plan; a bookshelf model used for Atmos duty is still drawn at height, not on the ceiling</span></label>
         <select id="miMountType">
@@ -3885,6 +3899,20 @@ function syncScreenDimsPreview(){
   const d = screenDimsFromDiagonal(diag, aspect);
   el.textContent = `Image size: ${d.widthInches.toFixed(1)}" wide × ${d.heightInches.toFixed(1)}" tall (${(d.widthInches/12).toFixed(1)}ft × ${(d.heightInches/12).toFixed(1)}ft)`;
 }
+// Zoom ratio = throw ratio max ÷ min — how much optical zoom range the lens actually has, the
+// number most projector datasheets quote directly (e.g. "1.3x zoom") alongside the two throw
+// ratios. Purely derived from the two fields already being entered, so it's a live readout, not
+// a separate input that could drift out of sync with them.
+function syncZoomRatioPreview(){
+  const el = document.getElementById('miZoomRatioPreview');
+  if(!el) return;
+  const tmin = +document.getElementById('miThrowRatioMin').value || 0;
+  const tmax = +document.getElementById('miThrowRatioMax').value || 0;
+  if(!tmin || !tmax){ el.textContent = ''; return; }
+  if(tmax < tmin){ el.textContent = 'Max should be greater than or equal to min throw ratio'; el.style.color = 'var(--red)'; return; }
+  el.style.color = '';
+  el.textContent = `Zoom ratio: ${(tmax/tmin).toFixed(2)}x`;
+}
 // Swaps the explanatory line under the Tax Inclusive switch so it always states plainly what
 // the current position means, rather than making the installer infer it from the toggle alone.
 function syncTaxHint(){
@@ -3925,6 +3953,7 @@ function openItemModal(id){
     document.getElementById('miLightSource').value=it.lightSource||'Lamp';
     document.getElementById('miThrowRatioMin').value=it.throwRatioMin!=null?it.throwRatioMin:'';
     document.getElementById('miThrowRatioMax').value=it.throwRatioMax!=null?it.throwRatioMax:'';
+    syncZoomRatioPreview();
     document.getElementById('miMountType').value=it.mountType||'bookshelf';
     document.getElementById('miAvrType').value=it.avrType||'receiver';
     document.getElementById('miALR').checked=!!it.ambientLightRejecting;
@@ -3957,6 +3986,7 @@ function openItemModal(id){
     document.getElementById('miLightSource').value='Lamp';
     document.getElementById('miThrowRatioMin').value='';
     document.getElementById('miThrowRatioMax').value='';
+    syncZoomRatioPreview();
     document.getElementById('miMountType').value='bookshelf';
     document.getElementById('miAvrType').value='receiver';
     document.getElementById('miALR').checked=false;
@@ -4394,6 +4424,7 @@ function resetRoomPlanAngles(){
   document.getElementById('rpAngleSurround').value = RP_DEFAULT_ANGLES.surround;
   document.getElementById('rpAngleRear').value = RP_DEFAULT_ANGLES.rear;
   document.getElementById('rpAngleAtmos').value = RP_DEFAULT_ANGLES.atmosElev;
+  delete document.getElementById('rpAtmosSep').dataset.userSet; // back to the room-width-scaled default
   syncAngleLabels();
   drawRoomPlan();
 }
@@ -4618,7 +4649,10 @@ function computeRoomPlan(){
   const atmosDrop = H - earH;
   const atmosOffRaw = atmosDrop / Math.tan(ang.atmosElev*Math.PI/180);
   const atmosOff = Math.max(0.5, Math.min(L/2-0.5, atmosOffRaw));
-  const atmosSide = Math.min(W/2-1, 3);
+  const atmosSepSliderEl = typeof document!=='undefined' ? document.getElementById('rpAtmosSep') : null;
+  const atmosSepUserVal = atmosSepSliderEl && atmosSepSliderEl.dataset.userSet!==undefined ? +atmosSepSliderEl.value : null;
+  const atmosSepDefault = Math.min(W/2-1, W*0.4); // scales with room width instead of a flat cap
+  const atmosSide = Math.min(W/2-1, atmosSepUserVal!=null ? atmosSepUserVal : atmosSepDefault);
   const atmosH = atmosCeilingMounted ? H : Math.min(H-1, 7.5);
   const atmosMountTag = atmosCeilingMounted ? 'Ceiling Speaker' : `Atmos Speaker — stacked on the ${atmosItem.mountType==='floorstanding'?'floorstander':'speaker'} below, angled up`;
   if(atmosPairs>=1){
@@ -4633,6 +4667,8 @@ function computeRoomPlan(){
   // projector — mounted along the centreline, at the REAL throw distance for the selected
   // projector + screen (the screen's actual aspect ratio, not the drawing's fixed 16:9 shorthand)
   // — this is the number an electrician needs to actually drill the ceiling mount, not a guess.
+  // If the throw slider has an actual user-picked value, that wins over the plain midpoint — lets
+  // you choose exactly where in the valid zoom range to mount it (a joist, a beam to avoid, etc.)
   if(!useQuote || isPresent('projector')){
     const projItem = useQuote ? items.find(i=>i.id===quote.selections.projector) : null;
     const screenItem = useQuote ? items.find(i=>i.id===quote.selections.screen) : null;
@@ -4642,9 +4678,12 @@ function computeRoomPlan(){
     if(projItem && projItem.throwRatioMin!=null && projItem.throwRatioMax!=null){
       const realDims = screenDimsFromDiagonal(screenIn, (screenItem&&screenItem.aspectRatio)||'16:9');
       const range = throwDistanceRange(realDims.widthInches, projItem.throwRatioMin, projItem.throwRatioMax);
-      const midFt = ((range.minInches+range.maxInches)/2)/12;
-      projY = midFt;
-      projNote = `Mount ${midFt.toFixed(1)}ft from the screen wall, centred left-right. Throw range for this lens: ${(range.minInches/12).toFixed(1)}–${(range.maxInches/12).toFixed(1)}ft — anywhere in that band works, zoom to fit.`;
+      const minFt = range.minInches/12, maxFt = range.maxInches/12;
+      const sliderEl = typeof document!=='undefined' ? document.getElementById('rpThrowSlider') : null;
+      const sliderVal = sliderEl && sliderEl.dataset.userSet!==undefined ? +sliderEl.value : null;
+      const withinRange = sliderVal!=null && sliderVal>=minFt-0.05 && sliderVal<=maxFt+0.05;
+      projY = withinRange ? sliderVal : (minFt+maxFt)/2;
+      projNote = `Mount ${projY.toFixed(1)}ft from the screen wall, centred left-right. Throw range for this lens: ${minFt.toFixed(1)}–${maxFt.toFixed(1)}ft — anywhere in that band works, zoom to fit.`;
     }
     addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, H, {ceiling:true, kind:'video', note:projNote});
   }
@@ -4701,6 +4740,7 @@ function fmtFt(v){
 function drawRoomPlan(){
   syncAngleLabels();
   const plan = computeRoomPlan();
+  syncAtmosSepSlider(plan.W);
   const show = document.getElementById('rpShow').value;
   const { W, L, seat, rackPos, markers, screenW } = plan;
 
@@ -4716,6 +4756,7 @@ function drawRoomPlan(){
   // uses the screen's real aspect ratio (not the drawing's fixed 16:9 shorthand), since throw
   // math genuinely changes with image shape.
   const throwEl = document.getElementById('rpThrowDistance');
+  const sliderWrap = document.getElementById('rpThrowSliderWrap');
   if(throwEl){
     const diagIn = +document.getElementById('rpScreen').value || 0;
     const projId = quote && quote.selections && quote.selections.projector;
@@ -4724,14 +4765,17 @@ function drawRoomPlan(){
     const screenItem = screenId ? items.find(i=>i.id===screenId) : null;
     if(!diagIn){
       throwEl.textContent = '';
+      if(sliderWrap) sliderWrap.style.display = 'none';
     } else {
       const dims = screenDimsFromDiagonal(diagIn, (screenItem&&screenItem.aspectRatio)||'16:9');
       let text = `Image: ${dims.widthInches.toFixed(1)}" W × ${dims.heightInches.toFixed(1)}" H`;
       let warn = false;
       if(!proj){
         text += ' — no projector in quote yet';
+        if(sliderWrap) sliderWrap.style.display = 'none';
       } else if(proj.throwRatioMin==null || proj.throwRatioMax==null){
         text += ` · ${proj.brand} ${proj.model}: throw ratio not set in Price List`;
+        if(sliderWrap) sliderWrap.style.display = 'none';
       } else {
         const range = throwDistanceRange(dims.widthInches, proj.throwRatioMin, proj.throwRatioMax);
         const minFt = range.minInches/12, maxFt = range.maxInches/12;
@@ -4739,6 +4783,20 @@ function drawRoomPlan(){
         if(L < minFt){ text += ` ⚠ room is only ${L.toFixed(1)}ft deep — too shallow for this projector`; warn = true; }
         else if(L > maxFt){ text += ` ⚠ room is ${L.toFixed(1)}ft deep — projector would sit mid-room, not at the back wall`; warn = true; }
         else { text += ` ✓ fits a ${L.toFixed(1)}ft deep room`; }
+        // Slider lets you pick exactly where in the valid range to mount it, instead of always
+        // defaulting to the midpoint — reset to midpoint only if this is a new range (different
+        // projector/screen) that makes the last manually-picked value meaningless.
+        if(sliderWrap){
+          sliderWrap.style.display = 'block';
+          const slider = document.getElementById('rpThrowSlider');
+          const prevMin = +slider.min, prevMax = +slider.max;
+          const rangeChanged = Math.abs(prevMin-minFt)>0.01 || Math.abs(prevMax-maxFt)>0.01;
+          slider.min = minFt.toFixed(2); slider.max = maxFt.toFixed(2);
+          if(rangeChanged || !slider.dataset.userSet){ slider.value = ((minFt+maxFt)/2).toFixed(2); slider.dataset.userSet=''; }
+          document.getElementById('rpThrowMinLabel').textContent = minFt.toFixed(1)+'ft';
+          document.getElementById('rpThrowMaxLabel').textContent = maxFt.toFixed(1)+'ft';
+          document.getElementById('rpThrowVal').textContent = (+slider.value).toFixed(1)+'ft';
+        }
       }
       throwEl.textContent = text;
       throwEl.style.color = warn ? 'var(--red)' : '';
@@ -5007,6 +5065,30 @@ let _rpRaf = null;
 function drawRoomPlanThrottled(){
   if(_rpRaf) return;
   _rpRaf = requestAnimationFrame(()=>{ _rpRaf = null; drawRoomPlan(); });
+}
+// Dragging the throw-distance slider picks exactly where in the valid zoom range to mount the
+// projector, instead of always defaulting to the midpoint.
+function onThrowSliderInput(){
+  const slider = document.getElementById('rpThrowSlider');
+  slider.dataset.userSet = '1';
+  document.getElementById('rpThrowVal').textContent = (+slider.value).toFixed(1)+'ft';
+  drawRoomPlanThrottled();
+}
+// Default separation scales with room width (Math.min(W/2-1, W*0.4)) so it's never displayed
+// until we know W — updates the readout and, on first load only, sets a starting value.
+function syncAtmosSepSlider(W){
+  const slider = document.getElementById('rpAtmosSep');
+  if(!slider) return;
+  if(!slider.dataset.userSet){
+    slider.value = Math.min(W/2-1, W*0.4).toFixed(2);
+  }
+  document.getElementById('rpAtmosSepVal').textContent = (+slider.value).toFixed(1)+'ft';
+}
+function onAtmosSepInput(){
+  const slider = document.getElementById('rpAtmosSep');
+  slider.dataset.userSet = '1';
+  document.getElementById('rpAtmosSepVal').textContent = (+slider.value).toFixed(1)+'ft';
+  drawRoomPlanThrottled();
 }
 // CSS-based fullscreen rather than the Fullscreen API: iOS Safari doesn't support that API on
 // arbitrary elements (only video), so a class toggle is the only approach that works everywhere.
