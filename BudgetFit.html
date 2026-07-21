@@ -176,9 +176,6 @@ header{position:sticky;top:0;z-index:40;background:rgba(243,244,250,.82);-webkit
   .specs-details summary{padding:6px 0}
 }
 .lockbtn.locked{color:var(--cyan);border-color:var(--cyan)}
-.tierdots{display:flex;gap:3px;margin-top:6px}
-.tierdots i{width:6px;height:6px;border-radius:50%;background:var(--border2)}
-.tierdots i.on{background:var(--yellow-deep)}
 
 /* ---------- price list ---------- */
 .plist-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -1094,15 +1091,11 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           <option value="processor">Processor / Pre-amp (needs separate power amp)</option>
         </select>
       </div>
-      <div class="row" id="miCableRow" style="display:none">
-        <div class="field"><label>Length</label>
-          <select id="miCableLength">
-            <option value="">— select —</option>
-            <option value="100">100 m</option>
-            <option value="150">150 m</option>
-            <option value="300">300 m</option>
-          </select>
-        </div>
+      <div class="row" id="miCableLengthRow" style="display:none">
+        <div class="field"><label>Length (m) <span class="hint" style="text-transform:none">— actual length on the datasheet/box</span></label>
+          <input id="miCableLength" type="number" step="0.5" min="0" placeholder="e.g. 100"></div>
+      </div>
+      <div class="row" id="miCableGaugeRow" style="display:none">
         <div class="field"><label>Gauge</label>
           <select id="miCableGauge">
             <option value="">— select —</option>
@@ -1233,7 +1226,8 @@ const DEFAULT_CATS = [
   {id:'projector',  name:'Projector',                 weight:20, enabled:true},
   {id:'screen',     name:'Projection Screen',         weight:7,  enabled:true},
   {id:'htib',       name:'Home Theater in a Box',     weight:36, enabled:true},
-  {id:'avr',        name:'AV Receiver / Processor',   weight:13, enabled:true},
+  {id:'avr',        name:'AV Receiver',               weight:13, enabled:true},
+  {id:'avprocessor',name:'AV Processor',              weight:13, enabled:true},
   {id:'poweramp',   name:'Power Amplifier',           weight:8,  enabled:true},
   {id:'fronts',     name:'Front L/R Speakers',        weight:13, enabled:true},
   {id:'center',     name:'Center Speaker',            weight:5,  enabled:true},
@@ -1277,9 +1271,9 @@ const SAMPLE_ITEMS = [
   ['avr','Denon','AVR-X4800H (9.4)',180000,1,9],
   ['avr','Denon','AVC-X6700H (11.2)',220000,1,11],['avr','Marantz','Cinema 30 (11.4)',620800,1,11],
   ['avr','Denon','AVC-A110 (13.2)',759900,1,13],
-  ['avr','Marantz','AV30 (11.4ch processing)',549900,1,11,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
-  ['avr','Marantz','AV20 (13.4ch processing)',799900,1,13,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
-  ['avr','Marantz','AV10 (15.4ch processing)',1264000,1,15,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
+  ['avprocessor','Marantz','AV30 (11.4ch processing)',549900,1,11,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
+  ['avprocessor','Marantz','AV20 (13.4ch processing)',799900,1,13,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
+  ['avprocessor','Marantz','AV10 (15.4ch processing)',1264000,1,15,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'processor'],
   // fronts (priced per pair)
   ['fronts','Wharfedale','Diamond 12.3 (pair)',55000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],['fronts','Polk','Signature Elite ES60 (pair)',72000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],
   ['fronts','Wharfedale','Evo 4.3 (pair)',92000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],['fronts','Klipsch','RP-6000F II (pair)',98000,1,undefined,undefined,undefined,undefined,undefined,'floorstanding'],
@@ -1338,9 +1332,11 @@ const SAMPLE_ITEMS = [
   ['avcable','AudioQuest','Optical Toslink (2m)',3500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Optical Toslink, 2m'],
   ['avcable','Canare','XLR Balanced Cable pair (3m)',4500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'XLR balanced pair, 3m'],
   // network cable
-  ['netcable','Generic','Cat6 cable (100m box)',3500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6, 100m box'],
-  ['netcable','Generic','Cat6a cable (100m box)',5500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6a, 100m box'],
-  ['netcable','Generic','Cat7 cable (100m box)',8000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat7, 100m box'],
+  ['netcable','Generic','Cat6 cable (100m box)',3500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,100,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6, 100m box'],
+  ['netcable','Generic','Cat6 cable (50m box)',1900,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,50,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6, 50m box'],
+  ['netcable','Generic','Cat6a cable (100m box)',5500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,100,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6a, 100m box'],
+  ['netcable','Generic','Cat6a cable (150m box)',7800,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,150,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat6a, 150m box'],
+  ['netcable','Generic','Cat7 cable (100m box)',8000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,100,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Cat7, 100m box'],
   // connectors & accessories
   ['connectors','Generic','Banana Plugs (set of 4 pairs)',800,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Banana plug'],
   ['connectors','WBT-style','Premium Banana Plugs (pair)',2500,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Banana plug (premium)'],
@@ -1408,32 +1404,45 @@ function qeff(it, ch, htibMode, subCount){ return eff(it) * multFor(it.cat, ch, 
 //    the selected channel config (e.g. plain 5.1), which the usual multFor>0 filters already exclude.
 //  - HTiB mode OFF → the 'htib' category itself is bypassed; everything else behaves normally.
 const HTIB_ALWAYS_REPLACES = ['fronts','center','sub'];
+// A quote has exactly one "central unit" — an AV Receiver or an AV Processor, never both. Which
+// one is active is controlled by the AVR Type preference (same flag that used to just filter
+// within one combined category before they were split) — the same pattern as htibMode deciding
+// between HTiB and component categories.
+const CENTRAL_UNIT_CATS = ['avr','avprocessor'];
+function centralUnitMode(){
+  return (typeof moreFilterPrefs!=='undefined' && moreFilterPrefs.avrType==='processor') ? 'avprocessor' : 'avr';
+}
+function centralUnitSelId(sel){ return sel && (sel.avr || sel.avprocessor); }
+function centralUnitItem(sel){ const id = centralUnitSelId(sel); return id ? items.find(i=>i.id===id) : null; }
 function catAllowed(catId, q, ch){
   const htibMode = !!(q && q.htib);
   if(catId === 'htib') return htibMode;
   if(htibMode && HTIB_ALWAYS_REPLACES.includes(catId)) return false;
+  if(CENTRAL_UNIT_CATS.includes(catId)) return catId === centralUnitMode();
   if(catId === 'poweramp'){
     // A Receiver whose own amplification already covers the system needs nothing extra — pairing
-    // it with a power amp is redundant spend. A Processor (no amp of its own) always needs one.
-    // A receiver WITH pre-outs (e.g. a real Marantz Cinema 50: 9ch amplified, 11ch pre-out) sits
-    // in between — it needs a power amp only for the GAP beyond what it amplifies itself.
-    if(q && q.selections && q.selections.avr){
-      // An AVR has actually been picked — this is the authoritative answer, and it's what
-      // protects against the edge case where someone builds a quote with a Processor + Power
-      // Amp, then manually swaps the AVR to a Receiver (with or without pre-outs) afterward.
-      const avrItem = items.find(i=>i.id===q.selections.avr);
+    // it with a power amp is redundant spend. A Processor (no amp of its own, now its own separate
+    // category) always needs one. A receiver WITH pre-outs (e.g. a real Marantz Cinema 50: 9ch
+    // amplified, 11ch pre-out) sits in between — it needs a power amp only for the GAP beyond what
+    // it amplifies itself.
+    const centralId = q && q.selections && centralUnitSelId(q.selections);
+    if(centralId){
+      // A central unit has actually been picked — this is the authoritative answer, and it's what
+      // protects against the edge case where someone builds a quote with a Processor + Power Amp,
+      // then manually swaps to a Receiver (with or without pre-outs) afterward.
+      if(q.selections.avprocessor) return true; // Processor category = zero built-in amp, always needs one
+      const avrItem = items.find(i=>i.id===centralId);
       if(!avrItem) return false;
-      if(avrItem.avrType === 'processor') return true;
       const chObj = ch || (q.channel ? getChannel(q.channel) : null);
       if(!chObj) return false;
       return powerampGapChannels(q.selections, chObj) > 0;
     }
-    // No AVR selected yet — allocateEquipment() building its initial category list. Let power amp
-    // into consideration if the user explicitly wants a Processor, OR the system is large enough
-    // (7.1.4+) that pre-out help is common even with a Receiver. Either way this only decides
-    // whether the allocator TRIES a power amp — the authoritative check above, once an AVR is
-    // actually picked, is what really decides.
-    const prefersProcessor = typeof moreFilterPrefs!=='undefined' && moreFilterPrefs.avrType === 'processor';
+    // No central unit selected yet — allocateEquipment() building its initial category list. Let
+    // power amp into consideration if the user explicitly wants a Processor, OR the system is
+    // large enough (7.1.4+) that pre-out help is common even with a Receiver. Either way this only
+    // decides whether the allocator TRIES a power amp — the authoritative check above, once a
+    // central unit is actually picked, is what really decides.
+    const prefersProcessor = centralUnitMode()==='avprocessor';
     const chObj = ch || (q && q.channel ? getChannel(q.channel) : null);
     const largeSystem = chObj ? avrRequiredChannels(chObj) >= 11 : false;
     return prefersProcessor || largeSystem;
@@ -1541,6 +1550,12 @@ if(!cats.some(c=>c.id==='htib')){
       touched = true;
     }
   });
+  // rename: 'avr' already existing under its old combined name — the migration above only adds
+  // categories that are MISSING by id, so an existing 'avr' entry never gets its name updated on
+  // its own. Without this, an existing user's price list keeps showing "AV Receiver / Processor"
+  // forever even though AV Processor has its own separate category now.
+  const avrCat = cats.find(c=>c.id==='avr');
+  if(avrCat && avrCat.name==='AV Receiver / Processor'){ avrCat.name = 'AV Receiver'; touched = true; }
   if(touched) store.set('bf_cats', cats);
 }
 // one-time migration: Power Amp, AV Cables, Network Cable, Connectors, and Automation used to
@@ -1567,7 +1582,7 @@ function mkItem(a){ return {id:'i'+(++uid), cat:a[0], brand:a[1], model:a[2], pr
 // Categories with a rich structured attribute already (channels, screen fields, mounting, cable
 // gauge, etc) don't need the generic Variant field — everyone else gets it, so nothing is left
 // with genuinely no sub-type/size field at all.
-const NO_VARIANT_FIELD_CATS = ['avr','poweramp','screen','projector','spkcable','hdmi','fronts','center','surrounds'];
+const NO_VARIANT_FIELD_CATS = ['avr','avprocessor','poweramp','screen','projector','spkcable','hdmi','fronts','center','surrounds'];
 const MOUNT_CATS = ['fronts','center','surrounds','atmos']; // speaker categories that support mount-type selection — Atmos included since it's sometimes run off a bookshelf speaker instead of a true in-ceiling unit
 const ARCHITECTURAL_MOUNTS = ['inwall','inceiling']; // built into the wall/ceiling — everything else (floorstanding/bookshelf/satellite, or legacy 'standmount' data) counts as a standard, visible speaker
 const MOUNT_LABELS = {floorstanding:'floor standing', bookshelf:'bookshelf', satellite:'satellite', inwall:'in-wall', inceiling:'in-ceiling', standmount:'standmount / floor'};
@@ -1578,12 +1593,21 @@ else if(!items.some(i=>i.cat==='htib')){
   SAMPLE_ITEMS.filter(a=>a[0]==='htib').forEach(a=> items.push(mkItem(a)));
   store.set('bf_items', items); store.set('bf_uid', uid);
 }
+// migration: AV Receiver and AV Processor used to be one combined category, distinguished only by
+// the avrType field — now they're separate categories. Move any existing item that was flagged as
+// a processor into its own real category, rather than leave it stranded under 'avr' where none of
+// the new Processor-specific logic (or the "AV Processor can't be deleted" protection) would apply.
+{
+  let touched = false;
+  items.filter(i=>i.cat==='avr' && i.avrType==='processor').forEach(i=>{ i.cat='avprocessor'; touched=true; });
+  if(touched) store.set('bf_items', items);
+}
 // migration: back-fill inferred channel counts on existing AVR entries that predate the field,
 // and seed a couple of higher-channel units so 7.1.4+ systems have something that actually fits
 // (otherwise every 7.1.4/9.1.2/9.1.4 quote would fall back with a channel-shortfall warning)
 {
   let touched = false;
-  items.filter(i=>i.cat==='avr' && i.channels==null).forEach(i=>{
+  items.filter(i=>(i.cat==='avr'||i.cat==='avprocessor') && i.channels==null).forEach(i=>{
     const inferred = inferChannelsFromModel(i.model) || inferChannelsFromModel(i.brand+' '+i.model);
     if(inferred){ i.channels = inferred; touched = true; }
   });
@@ -1631,10 +1655,11 @@ else if(!items.some(i=>i.cat==='htib')){
     const m = i.model.match(/(\d+(?:\.\d+)?)\s*m\b/i);
     if(m){ i.hdmiLength = +m[1]; i.hdmiSpec = i.hdmiSpec || (/2\.1|ultra/i.test(i.model) ? 'Ultra High Speed' : 'High Speed'); touched = true; }
   });
-  // seed a real Processor-type AVR for existing catalogs that predate the field — otherwise the
-  // AVR Type filter would always fall back with nothing to actually find
-  if(items.some(i=>i.cat==='avr') && !items.some(i=>i.cat==='avr' && i.avrType==='processor')){
-    SAMPLE_ITEMS.filter(a=>a[0]==='avr' && a[15]==='processor').forEach(a=> items.push(mkItem(a)));
+  // seed real AV Processor products for catalogs that have never had any — otherwise the category
+  // would sit permanently empty (it's protected from deletion, but that doesn't help if there's
+  // nothing in it to quote)
+  if(!items.some(i=>i.cat==='avprocessor')){
+    SAMPLE_ITEMS.filter(a=>a[0]==='avprocessor').forEach(a=> items.push(mkItem(a)));
     touched = true;
   }
   // seed a real receiver with pre-out reach beyond its amplified channels (a Marantz Cinema 50:
@@ -1994,9 +2019,9 @@ function avrMaxReach(it){ return Math.max(avrChannels(it)||0, it.preoutChannels|
 // a receiver whose own amplification already covers the system needs nothing at all (returns 0).
 function powerampGapChannels(sel, ch){
   const needed = avrRequiredChannels(ch);
+  if(sel && sel.avprocessor) return needed; // Processor category = zero built-in amp, full requirement
   const avrItem = sel && sel.avr ? items.find(i=>i.id===sel.avr) : null;
   if(!avrItem) return needed;
-  if(avrItem.avrType === 'processor') return needed;
   const builtIn = avrChannels(avrItem) || 0;
   return Math.max(0, needed - builtIn);
 }
@@ -2007,17 +2032,20 @@ function powerampGapChannels(sel, ch){
 function catItemsForAvr(ch){
   const opts = catItemsPref('avr');
   const needed = avrRequiredChannels(ch);
-  // Sufficiency now checks the unit's FULL reach (amplified + pre-out), not just what it amplifies
-  // on its own — a receiver with pre-outs for the extra channels is a legitimate candidate for a
-  // larger system, same as a Processor is, as long as a power amp covers the gap (handled
-  // separately by powerampGapChannels / catItemsForPoweramp).
+  // Sufficiency checks the unit's FULL reach (amplified + pre-out), not just what it amplifies on
+  // its own — a receiver with pre-outs for the extra channels is a legitimate candidate for a
+  // larger system, as long as a power amp covers the gap (handled separately by
+  // powerampGapChannels / catItemsForPoweramp).
   const sufficient = opts.filter(it => avrMaxReach(it) >= needed);
-  const base = sufficient.length ? sufficient : opts;
-  // Type (Receiver/Processor) is a secondary preference applied AFTER the channel-safety filter,
-  // never instead of it — an underpowered AVR is a real installation problem, a type mismatch isn't.
-  if(!moreFilterPrefs.avrType) return base;
-  const typed = base.filter(it => (it.avrType||'receiver')===moreFilterPrefs.avrType);
-  return typed.length ? typed : base;
+  return sufficient.length ? sufficient : opts;
+}
+// Same channel-sufficiency safety check as catItemsForAvr — a Processor with too few processing
+// channels for the system is exactly as real a problem as an underpowered Receiver.
+function catItemsForAvprocessor(ch){
+  const opts = catItemsPref('avprocessor');
+  const needed = avrRequiredChannels(ch);
+  const sufficient = opts.filter(it => avrMaxReach(it) >= needed);
+  return sufficient.length ? sufficient : opts;
 }
 function catItemsForPoweramp(ch, sel){
   const all = catItemsPref('poweramp');
@@ -2035,14 +2063,15 @@ function catItemsForPoweramp(ch, sel){
 // After an allocation, reports whether the selected AVR is actually known to have enough channels
 // for the channel config — used to warn the user rather than silently under-powering a 7.1.4+ system.
 function checkAvrChannelShortfall(sel, ch){
-  const avrId = sel['avr'];
-  if(!avrId) return null;
-  const it = items.find(i=>i.id===avrId);
+  const centralId = centralUnitSelId(sel);
+  if(!centralId) return null;
+  const it = items.find(i=>i.id===centralId);
   if(!it) return null;
   const needed = avrRequiredChannels(ch);
   const have = avrChannels(it);
   const reach = avrMaxReach(it);
-  if(have==null && !it.preoutChannels) return `AVR channel count unknown for ${it.brand} ${it.model} — this system needs ${needed}+ channels, verify manually`;
+  const unitLabel = sel['avprocessor'] ? 'Processor' : 'AVR';
+  if(have==null && !it.preoutChannels) return `${unitLabel} channel count unknown for ${it.brand} ${it.model} — this system needs ${needed}+ channels, verify manually`;
   if(reach < needed) return `${it.brand} ${it.model} only reaches ${reach}ch (amplified + pre-out) — ${ch.id} needs ${needed}+ channels, no bigger unit found in your price list`;
   return null;
 }
@@ -2073,7 +2102,7 @@ let projScreenPrefs = { projRes:'', projLight:'', screenType:'', screenAT:'', sc
 // Same pattern as projScreenPrefs, for the sub-category attributes added afterward (TV size,
 // subwoofer type, HDMI spec, speaker cable gauge) — so ALL of Room's rich price-list attributes
 // actually filter what Generate Quote can pick, not just projector/screen.
-let moreFilterPrefs = { subType:'', hdmiSpec:'', hdmiLength:'', cableGauge:'', avrType:'', poweramplChannels:'', cableLength:'', avcableLength:'' };
+let moreFilterPrefs = { subType:'', hdmiSpec:'', hdmiLength:'', cableGauge:'', avrType:'', poweramplChannels:'', cableLength:'', avcableLength:'', netcableLength:'' };
 // Generic filter for every category whose only sub-type field is the free-form Variant text
 // (HTiB, Source, AV Cables, Network Cable, Connectors, Power, Mounts, Acoustics, Seating,
 // Automation). Dropdown options are built from whatever variant values actually exist in the
@@ -2102,6 +2131,13 @@ function catItemsForAvcable(){
   let opts = all;
   if(variantPrefs.avcable) opts = opts.filter(o=> o.variant===variantPrefs.avcable);
   if(moreFilterPrefs.avcableLength) opts = opts.filter(o=> String(o.cableLength||'')===String(moreFilterPrefs.avcableLength));
+  return opts.length ? opts : all;
+}
+function catItemsForNetcable(){
+  const all = catItemsPref('netcable');
+  let opts = all;
+  if(variantPrefs.netcable) opts = opts.filter(o=> o.variant===variantPrefs.netcable);
+  if(moreFilterPrefs.netcableLength) opts = opts.filter(o=> String(o.cableLength||'')===String(moreFilterPrefs.netcableLength));
   return opts.length ? opts : all;
 }
 function checkVariantFallback(sel){
@@ -2150,7 +2186,7 @@ function renderCategoryAttributesUI(){
       chips('caScreenSize',"setScreenSizePref(this.dataset.val)",[['','Any'],[84,'84"+'],[100,'100"+'],[120,'120"+'],[135,'135"+'],[150,'150"+']],projScreenPrefs.screenMinSize,'Min size') +
       `<div class="ca-field"><label>Or exact model</label><select id="prefScreenModel" onchange="setExactPref('screen',this.value)"><option value="">Any (use filters above)</option></select></div>`),
     row('Home Theater in a Box', chips('caHtib',"setVariantPref('htib',this.dataset.val)",dynamicOptions('htib'),variantPrefs.htib,'Type')),
-    row('AV Receiver / Processor', chips('caAvrType',"setMoreFilterPref('avrType',this.dataset.val)",[['','Any'],['receiver','Receiver'],['processor','Processor']],moreFilterPrefs.avrType,'Type')),
+    row('AVR / Processor selection', chips('caAvrType',"setMoreFilterPref('avrType',this.dataset.val)",[['','Receiver (default)'],['processor','Processor']],moreFilterPrefs.avrType,'Use')),
     row('Power Amplifier', chips('caPoweramp',"setMoreFilterPref('poweramplChannels',this.dataset.val)",channelOptions('poweramp'),moreFilterPrefs.poweramplChannels,'Channels')),
     row('Front L/R Speakers', chips('caStyleF',"setSpeakerStyle(this)",[['','Any'],['standard','Standard'],['architectural','Architectural']],speakerStylePref,'Style')),
     row('Center Speaker', `<div class="hint">Uses the same Style control as Front L/R above</div>`),
@@ -2167,7 +2203,9 @@ function renderCategoryAttributesUI(){
     row('AV Cables (RCA/Optical/XLR)',
       chips('caAvcableType',"setVariantPref('avcable',this.dataset.val)",dynamicOptions('avcable'),variantPrefs.avcable,'Type') +
       chips('caAvcableLength',"setMoreFilterPref('avcableLength',this.dataset.val)",[['','Any'],[1,'1m'],[2,'2m'],[3,'3m'],[5,'5m'],[10,'10m'],[15,'15m']],moreFilterPrefs.avcableLength,'Length')),
-    row('Network Cable (lot)', chips('caNetcable',"setVariantPref('netcable',this.dataset.val)",dynamicOptions('netcable'),variantPrefs.netcable,'Type')),
+    row('Network Cable (lot)',
+      chips('caNetcableType',"setVariantPref('netcable',this.dataset.val)",dynamicOptions('netcable'),variantPrefs.netcable,'Type') +
+      chips('caNetcableLength',"setMoreFilterPref('netcableLength',this.dataset.val)",[['','Any'],[50,'50m'],[100,'100m'],[150,'150m'],[300,'300m']],moreFilterPrefs.netcableLength,'Length')),
     row('Connectors &amp; Accessories', chips('caConnectors',"setVariantPref('connectors',this.dataset.val)",dynamicOptions('connectors'),variantPrefs.connectors,'Type')),
     row('Power Management', chips('caPower',"setVariantPref('power',this.dataset.val)",dynamicOptions('power'),variantPrefs.power,'Type')),
     row('Mounts, Rack &amp; Hardware', chips('caMounts',"setVariantPref('mounts',this.dataset.val)",dynamicOptions('mounts'),variantPrefs.mounts,'Type')),
@@ -2239,6 +2277,7 @@ function checkMoreFiltersFallback(sel){
   check('spkcable','cableGauge','cable gauge', it=>String(it.cableGauge||''));
   check('spkcable','cableLength','cable spool length', it=>String(it.cableLength||''));
   check('avcable','avcableLength','cable length', it=>String(it.cableLength||''));
+  check('netcable','netcableLength','cable length', it=>String(it.cableLength||''));
   return notes;
 }
 function saveProjScreenPrefs(){ store.set('bf_projscreenprefs', projScreenPrefs); }
@@ -2402,6 +2441,7 @@ function allocateEquipment(budget, ch, maxDisc, lockedSel, htibMode, subCount){
   const active = cats.filter(c=>c.enabled && catItems(c.id).length>0 && catAllowed(c.id,qCtx,ch) && multFor(c.id,ch,htibMode,subCount)>0);
   const optsFor = cid => {
     if(cid==='avr') return catItemsForAvr(ch);
+    if(cid==='avprocessor') return catItemsForAvprocessor(ch);
     if(cid==='projector') return catItemsForProjector();
     if(cid==='screen') return catItemsForScreen();
     if(cid==='sub') return catItemsForSub();
@@ -2409,6 +2449,7 @@ function allocateEquipment(budget, ch, maxDisc, lockedSel, htibMode, subCount){
     if(cid==='spkcable') return catItemsForSpkcable();
     if(cid==='poweramp') return catItemsForPoweramp(ch, sel);
     if(cid==='avcable') return catItemsForAvcable();
+    if(cid==='netcable') return catItemsForNetcable();
     if(GENERIC_VARIANT_CATS.includes(cid)) return catItemsForVariant(cid);
     if(MOUNT_CATS.includes(cid)) return catItemsForSpeaker(cid);
     return catItemsPref(cid);
@@ -2719,8 +2760,6 @@ function renderQuote(){
     const it=items.find(i=>i.id===quote.selections[c.id]);
     if(!it) return;
     const mult = multFor(c.id, ch, htibMode, subCount);
-    const idx=opts.findIndex(o=>o.id===it.id);
-    const dots = opts.map((o,i)=>`<i class="${i===idx?'on':''}" title="${fmt(qeff(o,ch,htibMode,subCount))}"></i>`).join('');
     const locked = quote.locked && quote.locked[c.id];
     const totalQty = (it.qty||1)*mult;
     const multLabel = c.id==='sub' ? `×${mult} subs` : `×${mult} sets`;
@@ -2733,7 +2772,6 @@ function renderQuote(){
         <div class="qsel"><select onchange="swapItem('${c.id}',this.value)">
           ${opts.map(o=>`<option value="${o.id}" ${o.id===it.id?'selected':''}>${optLabel(o)}</option>`).join('')}
         </select></div>
-        <div class="tierdots">${dots}</div>
       </div>
       <div class="qprice">${fmt(qeff(it,ch,htibMode,subCount))}<small>${totalQty>1? totalQty+' × '+fmt(it.price) : '&nbsp;'}</small></div>`;
     box.appendChild(line);
@@ -3802,7 +3840,7 @@ function renderDashboard(){
 // Compact attribute summary shown in price list rows / swap dropdowns — channels for AVRs,
 // frame type + AT for screens, resolution + light source for projectors.
 function itemAttrTag(it){
-  if(it.cat==='avr') return (avrChannels(it) ? ` · ${avrChannels(it)}ch` : ' · channels not set') + (it.preoutChannels ? ` (pre-out to ${it.preoutChannels}ch)` : '') + (it.avrType==='processor' ? ' · Processor (needs power amp)' : '');
+  if(it.cat==='avr'||it.cat==='avprocessor') return (avrChannels(it) ? ` · ${avrChannels(it)}ch` : ' · channels not set') + (it.preoutChannels ? ` (pre-out to ${it.preoutChannels}ch)` : '');
   if(it.cat==='poweramp') return avrChannels(it) ? ` · ${avrChannels(it)}ch` : '';
   if(it.cat==='screen') return ` · ${it.screenSize?it.screenSize+'"':'size not set'} · ${it.screenType==='motorized'?'motorised':'fixed frame'}${it.acousticTransparent?' · AT':''}${it.ambientLightRejecting?' · ALR':''}`;
   if(it.cat==='projector') return ` · ${it.resolution||'HD'} ${it.lightSource||'Lamp'}${(it.throwRatioMin!=null&&it.throwRatioMax!=null)?` · throw ${it.throwRatioMin}–${it.throwRatioMax}`:''}`;
@@ -3815,7 +3853,7 @@ function itemAttrTag(it){
 }
 // Same attributes, formatted as a "(...)" suffix for inline dropdown option text
 function itemAttrParen(it){
-  if(it.cat==='avr') return avrChannels(it) ? ` (${avrChannels(it)}ch${it.preoutChannels?'→'+it.preoutChannels+'ch pre':''}${it.avrType==='processor'?', Processor':''})` : '';
+  if(it.cat==='avr'||it.cat==='avprocessor') return avrChannels(it) ? ` (${avrChannels(it)}ch${it.preoutChannels?'→'+it.preoutChannels+'ch pre':''})` : '';
   if(it.cat==='poweramp') return avrChannels(it) ? ` (${avrChannels(it)}ch)` : '';
   if(it.cat==='screen') return ` (${it.screenSize?it.screenSize+'", ':''}${it.screenType==='motorized'?'Motorised':'Fixed'}${it.acousticTransparent?', AT':''}${it.ambientLightRejecting?', ALR':''})`;
   if(it.cat==='projector') return ` (${it.resolution||'HD'} ${it.lightSource||'Lamp'})`;
@@ -3831,6 +3869,7 @@ function catIcon(catId){
   if(catId==='projector') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="15" height="10" rx="2"></rect><circle cx="17" cy="12" r="2.5"></circle><path d="M22 9l-3 3 3 3"></path></svg>';
   if(catId==='screen') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>';
   if(catId==='avr') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="2"></rect><circle cx="7" cy="12" r="1.5"></circle><line x1="12" y1="12" x2="18" y2="12"></line></svg>';
+  if(catId==='avprocessor') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"></rect><line x1="9" y1="2" x2="9" y2="6"></line><line x1="15" y1="2" x2="15" y2="6"></line><line x1="9" y1="18" x2="9" y2="22"></line><line x1="15" y1="18" x2="15" y2="22"></line><line x1="2" y1="9" x2="6" y2="9"></line><line x1="2" y1="15" x2="6" y2="15"></line><line x1="18" y1="9" x2="22" y2="9"></line><line x1="18" y1="15" x2="22" y2="15"></line></svg>';
   if(catId==='poweramp') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="2"></rect><circle cx="8" cy="12" r="2.5"></circle><circle cx="16" cy="12" r="2.5"></circle></svg>';
   if(speakerIds.includes(catId)) return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"></rect><circle cx="12" cy="8" r="2"></circle><circle cx="12" cy="16" r="3.2"></circle></svg>';
   if(catId==='source') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>';
@@ -4006,17 +4045,18 @@ function openItemModal(id){
 // stays uncluttered for the other categories that don't need them.
 function syncCategoryFieldsVisibility(){
   const cat = document.getElementById('miCat').value;
-  document.getElementById('miChannelsRow').style.display = cat==='avr'||cat==='poweramp' ? 'block' : 'none';
-  document.getElementById('miPreoutRow').style.display = cat==='avr' ? 'block' : 'none';
-  document.getElementById('miChannelsHint').textContent = cat==='avr'
+  document.getElementById('miChannelsRow').style.display = cat==='avr'||cat==='avprocessor'||cat==='poweramp' ? 'block' : 'none';
+  document.getElementById('miPreoutRow').style.display = cat==='avr'||cat==='avprocessor' ? 'block' : 'none';
+  document.getElementById('miChannelsHint').textContent = (cat==='avr'||cat==='avprocessor')
     ? '— so a 7.2 unit is never picked for a 7.1.4+ system'
     : '— how many channels this amp drives (reference only, not used for allocation)';
   document.getElementById('miScreenRow').style.display = cat==='screen' ? 'block' : 'none';
   document.getElementById('miProjectorRow').style.display = cat==='projector' ? 'flex' : 'none';
   document.getElementById('miThrowRatioRow').style.display = cat==='projector' ? 'flex' : 'none';
   document.getElementById('miMountRow').style.display = MOUNT_CATS.includes(cat) ? 'block' : 'none';
-  document.getElementById('miAvrTypeRow').style.display = cat==='avr' ? 'block' : 'none';
-  document.getElementById('miCableRow').style.display = cat==='spkcable' ? 'flex' : 'none';
+  document.getElementById('miAvrTypeRow').style.display = 'none';
+  document.getElementById('miCableLengthRow').style.display = ['spkcable','avcable','netcable'].includes(cat) ? 'flex' : 'none';
+  document.getElementById('miCableGaugeRow').style.display = cat==='spkcable' ? 'flex' : 'none';
   document.getElementById('miHdmiRow').style.display = cat==='hdmi' ? 'flex' : 'none';
   document.getElementById('miSubRow').style.display = cat==='sub' ? 'flex' : 'none';
   const showVariant = !NO_VARIANT_FIELD_CATS.includes(cat);
@@ -4029,7 +4069,7 @@ function syncCategoryFieldsVisibility(){
     seating:'e.g. 2-seat recliner, 4-seat row', automation:'e.g. Universal remote, Automation hub',
   };
   document.getElementById('miVariant').placeholder = VARIANT_PLACEHOLDERS[cat] || 'e.g. size, spec, or sub-type';
-  const hasAttrs = ['avr','poweramp','screen','projector','spkcable','hdmi','sub'].includes(cat) || MOUNT_CATS.includes(cat) || showVariant;
+  const hasAttrs = ['avr','avprocessor','poweramp','screen','projector','spkcable','hdmi','sub'].includes(cat) || MOUNT_CATS.includes(cat) || showVariant;
   document.getElementById('miCatAttrs').style.display = hasAttrs ? 'block' : 'none';
 }
 function closeItemModal(){ document.getElementById('itemModalBg').classList.remove('show'); }
@@ -4054,8 +4094,8 @@ function saveItem(){
   const taxInclusive=document.getElementById('miTaxInclusive').checked;
   const gstRateVal=document.getElementById('miGstRate').value;
   const gstRate=gstRateVal===''?null:+gstRateVal;
-  const channels=(cat==='avr'||cat==='poweramp') ? (+document.getElementById('miChannels').value||null) : null;
-  const preoutChannels=cat==='avr' ? (+document.getElementById('miPreoutChannels').value||null) : null;
+  const channels=(cat==='avr'||cat==='avprocessor'||cat==='poweramp') ? (+document.getElementById('miChannels').value||null) : null;
+  const preoutChannels=(cat==='avr'||cat==='avprocessor') ? (+document.getElementById('miPreoutChannels').value||null) : null;
   const aspectRatio=cat==='screen' ? document.getElementById('miAspectRatio').value : null;
   const throwRatioMin=cat==='projector' ? (+document.getElementById('miThrowRatioMin').value||null) : null;
   const throwRatioMax=cat==='projector' ? (+document.getElementById('miThrowRatioMax').value||null) : null;
@@ -4066,8 +4106,8 @@ function saveItem(){
   const resolution=cat==='projector' ? document.getElementById('miResolution').value : null;
   const lightSource=cat==='projector' ? document.getElementById('miLightSource').value : null;
   const mountType=MOUNT_CATS.includes(cat) ? document.getElementById('miMountType').value : null;
-  const avrType=cat==='avr' ? document.getElementById('miAvrType').value : null;
-  const cableLength=cat==='spkcable' ? (+document.getElementById('miCableLength').value||null) : null;
+  const avrType=cat==='avr' ? 'receiver' : cat==='avprocessor' ? 'processor' : null;
+  const cableLength=['spkcable','avcable','netcable'].includes(cat) ? (+document.getElementById('miCableLength').value||null) : null;
   const cableGauge=cat==='spkcable' ? (+document.getElementById('miCableGauge').value||null) : null;
   const hdmiLength=cat==='hdmi' ? (+document.getElementById('miHdmiLength').value||null) : null;
   const hdmiSpec=cat==='hdmi' ? document.getElementById('miHdmiSpec').value : null;
@@ -4154,6 +4194,7 @@ const CATEGORY_GUESS_RULES = [
   [/\bhdmi\b/, 'hdmi'],
   [/\bmount\b|\brack\b/, 'mounts'],
   [/\bhtib\b|\bhome theater in a box\b|\bhome theatre in a box\b|\bsoundbar\b|\bsound bar\b|\ball[- ]in[- ]one\b/, 'htib'],
+  [/\bprocessor\b|\bpre-?amp\b|\bpreamp\b|\bav\s?(10|20|30)\b/, 'avprocessor'],
   [/\bavr\b|\bavc[- ]|\breceiver\b|\bpma[- ]|\bamplifier\b|\bintegrated amp\b/, 'avr'],
   [/\bsubwoofer\b|\bsub[- ]?woofer\b/, 'sub'],
   [/\bcent(er|re)\b/, 'center'],
@@ -4233,14 +4274,43 @@ function importXLSX(inp){
 
 // Finds an existing catalog item by category+brand+model (case-insensitive) so re-importing
 // an updated price list updates that item's price/qty in place instead of creating a duplicate.
-function findExistingItem(cat, brand, model){
+// Some categories sell the SAME model name in multiple genuinely distinct variants — a screen
+// material in a dozen diagonal sizes, cable in several lengths, a subwoofer in different driver
+// sizes — each a separate SKU with its own price. Matching on brand+model alone would silently
+// treat every later row as an "update" to the same single item, keeping only whichever variant
+// was processed last and quietly discarding the rest. This only adds a distinguishing field to
+// the match when the row actually provides one, so files that don't supply size/length data still
+// match exactly as before — nothing changes for the common case, only the collision case.
+function findExistingItem(cat, brand, model, extra){
   const b = String(brand||'').trim().toLowerCase(), m = String(model||'').trim().toLowerCase();
-  return items.find(i => i.cat===cat && i.brand.trim().toLowerCase()===b && i.model.trim().toLowerCase()===m);
+  const candidates = items.filter(i => i.cat===cat && i.brand.trim().toLowerCase()===b && i.model.trim().toLowerCase()===m);
+  if(!candidates.length) return undefined;
+  const distinguisher = it => {
+    if(cat==='screen') return it.screenSize!=null ? (it.screenSize+'|'+(it.aspectRatio||'16:9')) : null;
+    if(['spkcable','avcable','netcable'].includes(cat)) return it.cableLength;
+    if(cat==='hdmi') return it.hdmiLength;
+    if(cat==='sub') return it.subDriverSize;
+    if(['avr','avprocessor','poweramp'].includes(cat)) return it.channels;
+    return undefined;
+  };
+  const wantedVal = extra ? distinguisher({screenSize:extra.screenSize, aspectRatio:extra.aspectRatio, cableLength:extra.cableLength, hdmiLength:extra.hdmiLength, subDriverSize:extra.subDriverSize, channels:extra.channels}) : undefined;
+  if(wantedVal!=null){
+    // This row has a genuine distinguishing value — only match a candidate whose OWN value for
+    // that same attribute matches. Checked unconditionally (not just once multiple candidates
+    // already exist), since during a sequential import there's only ever one candidate present at
+    // the moment each new row is processed — waiting for ambiguity to already exist never catches it.
+    return candidates.find(i => distinguisher(i)===wantedVal);
+  }
+  // No distinguishing info on this row — fall back to the original, simpler brand+model match.
+  return candidates[0];
 }
 
 function importNativeRows(rows, ix, inp){
   const catIds = new Set(cats.map(c=>c.id));
   const catByName = {}; cats.forEach(c=>catByName[c.name.toLowerCase()]=c.id);
+  // Legacy name aliases — categories that were renamed or split, so an older export (or just a
+  // habit of typing the old name) still resolves correctly instead of creating a stray category.
+  catByName['av receiver / processor'] = catByName['av receiver / processor'] || 'avr';
   let added=0, updated=0, skipped=0;
   for(let ri=1; ri<rows.length; ri++){
     const r = rows[ri];
@@ -4263,7 +4333,8 @@ function importNativeRows(rows, ix, inp){
     const screenSize = ix.screensize>=0 ? (+r[ix.screensize]||null) : null;
     const mountType = ix.mounttype>=0 && r[ix.mounttype] ? String(r[ix.mounttype]).trim().toLowerCase() : null;
     const specs = ix.specs>=0 && r[ix.specs] ? parseSpecsText(String(r[ix.specs]).split('|').join('\n')) : null;
-    const avrType = ix.avrtype>=0 && r[ix.avrtype] ? String(r[ix.avrtype]).trim().toLowerCase() : null;
+    const avrType = (ix.avrtype>=0 && r[ix.avrtype]) ? String(r[ix.avrtype]).trim().toLowerCase()
+      : cid==='avr' ? 'receiver' : cid==='avprocessor' ? 'processor' : null;
     const ambientLightRejecting = ix.alr>=0 ? /^(y|yes|true|1)$/i.test(String(r[ix.alr]||'')) : false;
     const cableLength = ix.cablelength>=0 ? (+r[ix.cablelength]||null) : null;
     const cableGauge = ix.cablegauge>=0 ? (+r[ix.cablegauge]||null) : null;
@@ -4279,7 +4350,7 @@ function importNativeRows(rows, ix, inp){
     const aspectRatioImp = ix.aspectratio>=0 && r[ix.aspectratio] ? String(r[ix.aspectratio]).trim() : null;
     const throwRatioMinImp = ix.throwratiomin>=0 && r[ix.throwratiomin]!=='' && r[ix.throwratiomin]!=null ? (+r[ix.throwratiomin]||null) : null;
     const throwRatioMaxImp = ix.throwratiomax>=0 && r[ix.throwratiomax]!=='' && r[ix.throwratiomax]!=null ? (+r[ix.throwratiomax]||null) : null;
-    const existing = findExistingItem(cid, brand, model);
+    const existing = findExistingItem(cid, brand, model, {screenSize, aspectRatio: aspectRatioImp, cableLength, hdmiLength, subDriverSize, channels});
     if(existing){
       existing.price=price; existing.qty=qty;
       if(channels!=null) existing.channels=channels;
@@ -4698,7 +4769,8 @@ function computeRoomPlan(){
   }
 
   // rack-associated equipment — items with no distinct room position of their own
-  if(isPresent('avr')) addE('AVR', brandLabel('avr') || 'AV Receiver / Processor');
+  if(isPresent('avr')) addE('AVR', brandLabel('avr') || 'AV Receiver');
+  if(isPresent('avprocessor')) addE('AVP', brandLabel('avprocessor') || 'AV Processor');
   if(isPresent('source')) addE('SRC', brandLabel('source') || 'Media Player / Source');
   if(isPresent('hdmi')) addE('HDMI', brandLabel('hdmi') || 'HDMI / Interconnects');
   if(isPresent('power')) addE('PWR', brandLabel('power') || 'Power Management');
