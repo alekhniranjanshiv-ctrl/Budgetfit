@@ -187,6 +187,11 @@ header{position:sticky;top:0;z-index:40;background:rgba(243,244,250,.82);-webkit
 .cat-body{padding:4px 13px 11px;display:none}
 .cat-group.open .cat-body{display:block}
 .item-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border)}
+.item-row.just-saved{animation:justSavedFlash 1.8s ease-out}
+@keyframes justSavedFlash{
+  0%{background:var(--yellow-dim,rgba(255,199,44,.35));box-shadow:0 0 0 2px var(--yellow-deep) inset}
+  100%{background:transparent;box-shadow:0 0 0 0 transparent inset}
+}
 .item-icon-badge{width:32px;height:32px;background:var(--near-black);color:var(--yellow);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .specs-details{grid-column:1/-1;margin-top:2px}
 .specs-details summary{font-size:11px;color:var(--cyan);cursor:pointer;font-weight:600;list-style:none}
@@ -827,10 +832,17 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </div>
         <div class="field"><label>Rack / AVR location</label>
           <select id="rpRack" onchange="drawRoomPlan()">
-            <option value="front-right" selected>Front-right corner</option>
+            <option value="front-center" selected>Front-center (under screen)</option>
+            <option value="front-right">Front-right corner</option>
             <option value="front-left">Front-left corner</option>
             <option value="rear-right">Rear-right corner</option>
             <option value="rear-left">Rear-left corner</option>
+          </select>
+        </div>
+        <div class="field"><label>Surround wiring</label>
+          <select id="rpSurroundRoute" onchange="drawRoomPlan()">
+            <option value="ceiling" selected>Via ceiling conduit</option>
+            <option value="direct">Direct wall run</option>
           </select>
         </div>
         <div class="field"><label>Show</label>
@@ -1007,6 +1019,18 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         <label class="hint">Pre-out channels <span class="hint" style="text-transform:none">— total it can process via pre-outs, if more than it amplifies (e.g. Cinema 50: 9ch amplified, 11ch pre-out). Leave blank if it has none beyond its amplified count.</span></label>
         <input id="miPreoutChannels" type="number" min="1" max="16" placeholder="e.g. 11 for 9ch amplified + pre-out to 11">
       </div>
+      <div class="row" id="miAmpPowerRow" style="display:none">
+        <div class="field"><label>RMS power/channel (W) <span class="hint" style="text-transform:none">— all channels driven, not the inflated peak figure</span></label>
+          <input id="miRmsPower2" type="number" step="1" min="0" placeholder="e.g. 125"></div>
+        <div class="field"><label>Rated at</label>
+          <select id="miRatedImpedance">
+            <option value="">— select —</option>
+            <option value="4">4 Ω</option>
+            <option value="6">6 Ω</option>
+            <option value="8">8 Ω</option>
+          </select>
+        </div>
+      </div>
       <div id="miScreenRow" style="display:none">
         <div class="row">
           <div class="field"><label>Diagonal size (in)</label>
@@ -1026,6 +1050,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
               <option value="180">180"</option>
               <option value="200">200"</option>
               <option value="220">220"</option>
+              <option value="240">240"</option>
               <option value="250">250"</option>
             </select>
           </div>
@@ -1083,6 +1108,25 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           <option value="inwall">In-wall</option>
           <option value="inceiling">In-ceiling</option>
         </select>
+      </div>
+      <div class="row" id="miSpeakerSpecRow" style="display:none">
+        <div class="field"><label>Sensitivity (dB) <span class="hint" style="text-transform:none">— @ 1W/1m, from the datasheet</span></label>
+          <input id="miSensitivity" type="number" step="0.1" min="0" placeholder="e.g. 88"></div>
+        <div class="field"><label>Power handling (W RMS)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="miPowerHandlingMin" type="number" step="1" min="0" placeholder="min" style="width:70px">
+            <span class="hint">–</span>
+            <input id="miPowerHandlingMax" type="number" step="1" min="0" placeholder="max" style="width:70px">
+          </div>
+        </div>
+        <div class="field"><label>Impedance</label>
+          <select id="miImpedance">
+            <option value="">— select —</option>
+            <option value="4">4 Ω</option>
+            <option value="6">6 Ω</option>
+            <option value="8">8 Ω</option>
+          </select>
+        </div>
       </div>
       <div class="mrow" id="miAvrTypeRow" style="display:none">
         <label class="hint">Type <span class="hint" style="text-transform:none">— a Processor has no built-in amplification and needs a separate Power Amplifier</span></label>
@@ -1143,6 +1187,8 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
             <option value="18">18"</option>
           </select>
         </div>
+        <div class="field"><label>RMS power (W) <span class="hint" style="text-transform:none">— amp output, from the datasheet</span></label>
+          <input id="miRmsPower" type="number" step="1" min="0" placeholder="e.g. 300"></div>
       </div>
       <div class="mrow" id="miVariantRow" style="display:none">
         <label class="hint">Type / variant <span class="hint" style="text-transform:none">— this category doesn't have a dedicated field yet, so use this for size, spec, or sub-type</span></label>
@@ -1578,7 +1624,9 @@ function mkItem(a){ return {id:'i'+(++uid), cat:a[0], brand:a[1], model:a[2], pr
   cableLength:a[12]||null, cableGauge:a[13]||null, panelType:a[14]||null, avrType:a[15]||null, ambientLightRejecting:!!a[16],
   hdmiLength:a[17]||null, hdmiSpec:a[18]||null, tvSize:a[19]||null, subType:a[20]||null, subDriverSize:a[21]||null, variant:a[22]||null,
   marginPct:a[23]!=null?+a[23]:0, taxInclusive:a[24]!=null?!!a[24]:true, gstRate:a[25]!=null?+a[25]:null, preoutChannels:a[26]!=null?+a[26]:null,
-  aspectRatio:a[27]||null, throwRatioMin:a[28]!=null?+a[28]:null, throwRatioMax:a[29]!=null?+a[29]:null}; }
+  aspectRatio:a[27]||null, throwRatioMin:a[28]!=null?+a[28]:null, throwRatioMax:a[29]!=null?+a[29]:null,
+  rmsPower:a[30]!=null?+a[30]:null, sensitivity:a[31]!=null?+a[31]:null, powerHandlingMin:a[32]!=null?+a[32]:null,
+  powerHandlingMax:a[33]!=null?+a[33]:null, impedance:a[34]!=null?+a[34]:null, ratedImpedance:a[35]!=null?+a[35]:null}; }
 // Categories with a rich structured attribute already (channels, screen fields, mounting, cable
 // gauge, etc) don't need the generic Variant field — everyone else gets it, so nothing is left
 // with genuinely no sub-type/size field at all.
@@ -3885,6 +3933,21 @@ function catIcon(catId){
   if(catId==='automation') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"></rect><line x1="9" y1="6" x2="15" y2="6"></line><circle cx="12" cy="14" r="3"></circle></svg>';
   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>';
 }
+// Price List sorts each category by price, so a newly-saved item can land anywhere in the list —
+// not at the top or bottom where you'd naturally expect to find what you just added. Without this,
+// it's easy to click the wrong row afterward and think a completely different item's edit form
+// opened "randomly". This makes it unambiguous: expand the group, scroll to the exact row, flash it.
+function highlightPricelistItem(id){
+  requestAnimationFrame(()=>{
+    const row = document.querySelector(`.item-row[data-item-id="${id}"]`);
+    if(!row) return;
+    const group = row.closest('.cat-group');
+    if(group && !group.classList.contains('open')) group.classList.add('open');
+    if(row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.classList.remove('just-saved'); void row.offsetWidth; // restart animation if triggered twice in a row
+    row.classList.add('just-saved');
+  });
+}
 function renderPlist(){
   const box=document.getElementById('plistBox'); box.innerHTML='';
   cats.forEach(c=>{
@@ -3899,7 +3962,7 @@ function renderPlist(){
       </div>
       <div class="cat-body">
         ${list.length? list.map(it=>`
-          <div class="item-row">
+          <div class="item-row" data-item-id="${it.id}">
             <span class="item-icon-badge">${catIcon(c.id)}</span>
             <div class="item-name">${it.brand} ${it.model}<small>qty ${it.qty} · unit ${fmt(it.price)}${it.marginPct?` · +${it.marginPct}% margin`:''}${it.taxInclusive===false?' · Tax excl.':''}${it.gstRate!=null?` · ${it.gstRate}% GST`:''}${itemAttrTag(it)}</small></div>
             <div style="text-align:right"><span class="brand-badge">${it.brand.toUpperCase()}</span><div class="item-price">${fmt(eff(it))}</div></div>
@@ -3915,7 +3978,7 @@ function renderPlist(){
   if(typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
 }
 let editingId=null;
-const STANDARD_SCREEN_SIZES = [84,92,100,106,110,120,125,133,135,150,165,180,200,220,250];
+const STANDARD_SCREEN_SIZES = [84,92,100,106,110,120,125,133,135,150,165,180,200,220,240,250];
 // If an existing item has a size outside the standard list (e.g. inferred from an old model name
 // like "103-inch"), add it as a one-off option so editing doesn't show a blank/wrong dropdown.
 function syncScreenSizeOptions(currentSize){
@@ -3995,6 +4058,13 @@ function openItemModal(id){
     syncZoomRatioPreview();
     document.getElementById('miMountType').value=it.mountType||'bookshelf';
     document.getElementById('miAvrType').value=it.avrType||'receiver';
+    document.getElementById('miRmsPower').value=it.rmsPower!=null?it.rmsPower:'';
+    document.getElementById('miRmsPower2').value=it.rmsPower!=null?it.rmsPower:'';
+    document.getElementById('miRatedImpedance').value=it.ratedImpedance!=null?it.ratedImpedance:'';
+    document.getElementById('miSensitivity').value=it.sensitivity!=null?it.sensitivity:'';
+    document.getElementById('miPowerHandlingMin').value=it.powerHandlingMin!=null?it.powerHandlingMin:'';
+    document.getElementById('miPowerHandlingMax').value=it.powerHandlingMax!=null?it.powerHandlingMax:'';
+    document.getElementById('miImpedance').value=it.impedance!=null?it.impedance:'';
     document.getElementById('miALR').checked=!!it.ambientLightRejecting;
     document.getElementById('miCableLength').value=it.cableLength||'';
     document.getElementById('miCableGauge').value=it.cableGauge||'';
@@ -4028,6 +4098,13 @@ function openItemModal(id){
     syncZoomRatioPreview();
     document.getElementById('miMountType').value='bookshelf';
     document.getElementById('miAvrType').value='receiver';
+    document.getElementById('miRmsPower').value='';
+    document.getElementById('miRmsPower2').value='';
+    document.getElementById('miRatedImpedance').value='';
+    document.getElementById('miSensitivity').value='';
+    document.getElementById('miPowerHandlingMin').value='';
+    document.getElementById('miPowerHandlingMax').value='';
+    document.getElementById('miImpedance').value='';
     document.getElementById('miALR').checked=false;
     document.getElementById('miCableLength').value='';
     document.getElementById('miCableGauge').value='';
@@ -4047,6 +4124,7 @@ function syncCategoryFieldsVisibility(){
   const cat = document.getElementById('miCat').value;
   document.getElementById('miChannelsRow').style.display = cat==='avr'||cat==='avprocessor'||cat==='poweramp' ? 'block' : 'none';
   document.getElementById('miPreoutRow').style.display = cat==='avr'||cat==='avprocessor' ? 'block' : 'none';
+  document.getElementById('miAmpPowerRow').style.display = cat==='avr'||cat==='avprocessor'||cat==='poweramp' ? 'flex' : 'none';
   document.getElementById('miChannelsHint').textContent = (cat==='avr'||cat==='avprocessor')
     ? '— so a 7.2 unit is never picked for a 7.1.4+ system'
     : '— how many channels this amp drives (reference only, not used for allocation)';
@@ -4054,6 +4132,7 @@ function syncCategoryFieldsVisibility(){
   document.getElementById('miProjectorRow').style.display = cat==='projector' ? 'flex' : 'none';
   document.getElementById('miThrowRatioRow').style.display = cat==='projector' ? 'flex' : 'none';
   document.getElementById('miMountRow').style.display = MOUNT_CATS.includes(cat) ? 'block' : 'none';
+  document.getElementById('miSpeakerSpecRow').style.display = MOUNT_CATS.includes(cat) ? 'flex' : 'none';
   document.getElementById('miAvrTypeRow').style.display = 'none';
   document.getElementById('miCableLengthRow').style.display = ['spkcable','avcable','netcable'].includes(cat) ? 'flex' : 'none';
   document.getElementById('miCableGaugeRow').style.display = cat==='spkcable' ? 'flex' : 'none';
@@ -4099,6 +4178,14 @@ function saveItem(){
   const aspectRatio=cat==='screen' ? document.getElementById('miAspectRatio').value : null;
   const throwRatioMin=cat==='projector' ? (+document.getElementById('miThrowRatioMin').value||null) : null;
   const throwRatioMax=cat==='projector' ? (+document.getElementById('miThrowRatioMax').value||null) : null;
+  const isAmpCat = cat==='avr'||cat==='avprocessor'||cat==='poweramp';
+  const rmsPower = cat==='sub' ? (+document.getElementById('miRmsPower').value||null)
+    : isAmpCat ? (+document.getElementById('miRmsPower2').value||null) : null;
+  const ratedImpedance = isAmpCat ? (+document.getElementById('miRatedImpedance').value||null) : null;
+  const sensitivity = MOUNT_CATS.includes(cat) ? (+document.getElementById('miSensitivity').value||null) : null;
+  const powerHandlingMin = MOUNT_CATS.includes(cat) ? (+document.getElementById('miPowerHandlingMin').value||null) : null;
+  const powerHandlingMax = MOUNT_CATS.includes(cat) ? (+document.getElementById('miPowerHandlingMax').value||null) : null;
+  const impedance = MOUNT_CATS.includes(cat) ? (+document.getElementById('miImpedance').value||null) : null;
   const screenType=cat==='screen' ? document.getElementById('miScreenType').value : null;
   const acousticTransparent=cat==='screen' ? document.getElementById('miAcousticTransparent').checked : false;
   const ambientLightRejecting=cat==='screen' ? document.getElementById('miALR').checked : false;
@@ -4116,16 +4203,18 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
   } else {
     items.push(Object.assign({id:nid()},extra));
   }
+  const savedId = editingId || items[items.length-1].id;
   store.set('bf_items',items);
   closeItemModal(); renderPlist(); renderWeights();
   if(quote) renderQuote();
+  highlightPricelistItem(savedId);
   toast('Saved');
 }
 function delItem(id){
@@ -4166,8 +4255,8 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant']];
-  items.forEach(i=> rows.push([i.cat, i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'']));
+  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance']];
+  items.forEach(i=> rows.push([i.cat, i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -4237,6 +4326,8 @@ function importXLSX(inp){
         avrtype:head.indexOf('avrtype'), alr:head.indexOf('ambientlightrejecting'), paneltype:head.indexOf('paneltype'),
         marginpct:head.indexOf('marginpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
         aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
+        rmspower:head.indexOf('rmspower'), ratedimpedance:head.indexOf('ratedimpedance'), sensitivity:head.indexOf('sensitivity'),
+        powerhandlingmin:head.indexOf('powerhandlingmin'), powerhandlingmax:head.indexOf('powerhandlingmax'), impedance:head.indexOf('impedance'),
         cablelength:head.indexOf('cablelength'), cablegauge:head.indexOf('cablegauge'),
         hdmilength:head.indexOf('hdmilength'), hdmispec:head.indexOf('hdmispec'), tvsize:head.indexOf('tvsize'),
         subtype:head.indexOf('subtype'), subdriversize:head.indexOf('subdriversize'), variant:head.indexOf('variant')};
@@ -4350,6 +4441,12 @@ function importNativeRows(rows, ix, inp){
     const aspectRatioImp = ix.aspectratio>=0 && r[ix.aspectratio] ? String(r[ix.aspectratio]).trim() : null;
     const throwRatioMinImp = ix.throwratiomin>=0 && r[ix.throwratiomin]!=='' && r[ix.throwratiomin]!=null ? (+r[ix.throwratiomin]||null) : null;
     const throwRatioMaxImp = ix.throwratiomax>=0 && r[ix.throwratiomax]!=='' && r[ix.throwratiomax]!=null ? (+r[ix.throwratiomax]||null) : null;
+    const rmsPowerImp = ix.rmspower>=0 && r[ix.rmspower]!=='' && r[ix.rmspower]!=null ? (+r[ix.rmspower]||null) : null;
+    const ratedImpedanceImp = ix.ratedimpedance>=0 && r[ix.ratedimpedance]!=='' && r[ix.ratedimpedance]!=null ? (+r[ix.ratedimpedance]||null) : null;
+    const sensitivityImp = ix.sensitivity>=0 && r[ix.sensitivity]!=='' && r[ix.sensitivity]!=null ? (+r[ix.sensitivity]||null) : null;
+    const powerHandlingMinImp = ix.powerhandlingmin>=0 && r[ix.powerhandlingmin]!=='' && r[ix.powerhandlingmin]!=null ? (+r[ix.powerhandlingmin]||null) : null;
+    const powerHandlingMaxImp = ix.powerhandlingmax>=0 && r[ix.powerhandlingmax]!=='' && r[ix.powerhandlingmax]!=null ? (+r[ix.powerhandlingmax]||null) : null;
+    const impedanceImp = ix.impedance>=0 && r[ix.impedance]!=='' && r[ix.impedance]!=null ? (+r[ix.impedance]||null) : null;
     const existing = findExistingItem(cid, brand, model, {screenSize, aspectRatio: aspectRatioImp, cableLength, hdmiLength, subDriverSize, channels});
     if(existing){
       existing.price=price; existing.qty=qty;
@@ -4377,9 +4474,15 @@ function importNativeRows(rows, ix, inp){
       if(marginPct!=null) existing.marginPct=marginPct;
       if(ix.taxinclusive>=0 && r[ix.taxinclusive]) existing.taxInclusive=taxInclusive;
       if(gstRateImp!=null) existing.gstRate=gstRateImp;
+      if(rmsPowerImp!=null) existing.rmsPower=rmsPowerImp;
+      if(ratedImpedanceImp!=null) existing.ratedImpedance=ratedImpedanceImp;
+      if(sensitivityImp!=null) existing.sensitivity=sensitivityImp;
+      if(powerHandlingMinImp!=null) existing.powerHandlingMin=powerHandlingMinImp;
+      if(powerHandlingMaxImp!=null) existing.powerHandlingMax=powerHandlingMaxImp;
+      if(impedanceImp!=null) existing.impedance=impedanceImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
@@ -4647,8 +4750,8 @@ function computeRoomPlan(){
   const mountExtra = catId => {
     const it = useQuote ? items.find(i=>i.id===quote.selections[catId]) : null;
     if(!it || !it.mountType || !ARCHITECTURAL_MOUNTS.includes(it.mountType)) return {};
-    if(it.mountType==='inceiling') return {ceiling:true, mountNote:'in-ceiling'};
-    return {mountNote:'in-wall'};
+    if(it.mountType==='inceiling') return {ceiling:true, mountNote:'in-ceiling', routeMode:'conduit'};
+    return {mountNote:'in-wall', routeMode:'conduit'};
   };
   if(htibActuallyShown){
     addM('HTIB', brandLabel('htib') || 'All-in-One Home Theater System', {x:0,y:0.6}, earH, {angle:0, kind:'speaker'});
@@ -4693,6 +4796,13 @@ function computeRoomPlan(){
   // at the "surround" angle (side position); any additional pair(s) sit at the "rear" angle.
   const survMount = mountExtra('surrounds');
   const survMountTag = survMount.mountNote ? ` (${survMount.mountNote})` : '';
+  // The toggle only matters when the surround itself isn't already architectural — an in-wall/
+  // in-ceiling surround is conduit-routed regardless, since the cavity it's mounted in typically
+  // connects to the ceiling void anyway. For a floorstanding/bookshelf/satellite surround, this is
+  // a genuine on-site choice: bring the wire via the ceiling conduit, or run it along the baseboard.
+  const surroundRoutePref = document.getElementById('rpSurroundRoute') ? document.getElementById('rpSurroundRoute').value : 'ceiling';
+  const survRouteMode = survMount.routeMode || (surroundRoutePref==='ceiling' ? 'conduit' : 'direct');
+  Object.assign(survMount, {routeMode: survRouteMode});
   const survLine = lineFor('surrounds');
   const survPairs = useQuote ? (survLine ? Math.max(1,Math.round(survLine.mult||1)) : 0)
                               : (rpChannelParts(cfgId).hasRear ? 2 : 1);
@@ -4727,12 +4837,12 @@ function computeRoomPlan(){
   const atmosH = atmosCeilingMounted ? H : Math.min(H-1, 7.5);
   const atmosMountTag = atmosCeilingMounted ? 'Ceiling Speaker' : `Atmos Speaker — stacked on the ${atmosItem.mountType==='floorstanding'?'floorstander':'speaker'} below, angled up`;
   if(atmosPairs>=1){
-    addM('TFL',`Front Left ${atmosMountTag} (Dolby Atmos)`+(brandLabel('atmos')?' — '+brandLabel('atmos'):''), {x:-atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
-    addM('TFR',`Front Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
+    addM('TFL',`Front Left ${atmosMountTag} (Dolby Atmos)`+(brandLabel('atmos')?' — '+brandLabel('atmos'):''), {x:-atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev, routeMode:'conduit'});
+    addM('TFR',`Front Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev, routeMode:'conduit'});
   }
   if(atmosPairs>=2){
-    addM('TRL',`Rear Left ${atmosMountTag} (Dolby Atmos)`, {x:-atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
-    addM('TRR',`Rear Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev});
+    addM('TRL',`Rear Left ${atmosMountTag} (Dolby Atmos)`, {x:-atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev, routeMode:'conduit'});
+    addM('TRR',`Rear Right ${atmosMountTag} (Dolby Atmos)`, {x: atmosSide,y:seat.y+atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev, routeMode:'conduit'});
   }
 
   // projector — mounted along the centreline, at the REAL throw distance for the selected
@@ -4756,7 +4866,7 @@ function computeRoomPlan(){
       projY = withinRange ? sliderVal : (minFt+maxFt)/2;
       projNote = `Mount ${projY.toFixed(1)}ft from the screen wall, centred left-right. Throw range for this lens: ${minFt.toFixed(1)}–${maxFt.toFixed(1)}ft — anywhere in that band works, zoom to fit.`;
     }
-    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, H, {ceiling:true, kind:'video', note:projNote});
+    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, H, {ceiling:true, kind:'video', note:projNote, routeMode:'conduit'});
   }
 
   // acoustic treatment — first-reflection zones on the side walls, roughly midway between the
@@ -4778,21 +4888,52 @@ function computeRoomPlan(){
   if(isPresent('spkcable')) addE('CBL', brandLabel('spkcable') || 'Speaker Cabling (lot) — see cable runs on plan');
 
   // rack position
+  const RACK_HEIGHT_FT = 4; // typical open rack shelf / AVR height off the floor
   const rackPos = {
+    'front-center':{x: 0, y:0.8},
     'front-right': {x:  W/2-0.8, y:0.8},
     'front-left':  {x: -W/2+0.8, y:0.8},
     'rear-right':  {x:  W/2-0.8, y:L-0.8},
     'rear-left':   {x: -W/2+0.8, y:L-0.8},
   }[rack];
 
-  // cable runs: rack -> each spatial marker that needs one (speakers + projector; not acoustic zones)
+  // cable runs: rack -> each spatial marker that needs one (speakers + projector; not acoustic
+  // zones). Two distinct physical paths, matching how wire is actually run on site rather than a
+  // straight line through walls:
+  //  - CONDUIT route (routeMode==='conduit'): up from the rack through the ceiling void, across to
+  //    above the speaker, then down to wherever it actually terminates — rise + traverse + drop.
+  //    The drop falls out naturally from each marker's real mount height (m.h): near-zero for a
+  //    true ceiling speaker, a full ceiling-to-wall drop for an in-wall one.
+  //  - DIRECT route (floorstanding/bookshelf/satellite, no conduit involved): a low-level run along
+  //    the room perimeter from the rack to the speaker, entering near its base — not at ear height,
+  //    which is where m.h points for drawing purposes on a floor-standing enclosure.
+  // Slack: +1m at each end (rack + speaker) on every run. HDMI to a ceiling-mounted projector gets
+  // extra on top — the drop-pole length is unknown until install day (up to ~4ft), so that's
+  // assumed worst-case rather than guessed short and coming up a cable short on site.
+  const METER_FT = 3.28084;
+  const BASE_SLACK_FT = 2 * METER_FT;      // +1m each end
+  const HDMI_POLE_ALLOWANCE_FT = 4;        // worst-case drop-pole length
+  const SPEAKER_TERMINAL_FT = 0.5;         // cable enters near the base of a floor/bookshelf enclosure
   markers.forEach(m=>{
     if(m.kind==='acoustic'){ m.cableFt = null; return; }
-    const dx = Math.abs(m.x - rackPos.x);
-    const dy = Math.abs(m.y - rackPos.y);
-    const perimeter = dx + dy;
-    const drop = m.ceiling ? (H - earH) : Math.abs(m.h - 0.5);
-    m.cableFt = Math.round((perimeter + drop) * 1.15);
+    const traverse = Math.abs(m.x - rackPos.x) + Math.abs(m.y - rackPos.y);
+    const conduitRouted = m.routeMode === 'conduit';
+    const pathFt = conduitRouted
+      ? (H - RACK_HEIGHT_FT) + traverse + (H - m.h)
+      : traverse + Math.abs(RACK_HEIGHT_FT - SPEAKER_TERMINAL_FT);
+    const isHdmi = m.kind==='video';
+    const slackFt = BASE_SLACK_FT + (isHdmi ? HDMI_POLE_ALLOWANCE_FT : 0);
+    m.cableFt = Math.round(Math.max(0, pathFt) + slackFt);
+    // Gauge advisory — voltage drop scales with run length, so a long run needs thicker wire than
+    // a short one on the same channel. This is informational (folded into the existing note field,
+    // already shown in the schedule and PDF), not auto-applied to any product spec, since the
+    // actual cable item's gauge is whatever's in the price list.
+    if(!isHdmi){
+      const gaugeAdvice = m.cableFt>=100 ? 'long run (100ft+) — spec at least 1.5 sqmm, 2.5 sqmm if it can stretch to 150ft+'
+        : m.cableFt>=50 ? 'moderate run (50ft+) — 1.5 sqmm recommended over 1.0 sqmm'
+        : null;
+      if(gaugeAdvice) m.note = m.note ? `${m.note} · ${gaugeAdvice}` : gaugeAdvice;
+    }
   });
 
   const viewAngle = 2*Math.atan((screenW/2)/seatToFront)*180/Math.PI;
