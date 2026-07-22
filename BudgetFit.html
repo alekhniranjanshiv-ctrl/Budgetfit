@@ -897,6 +897,10 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <button class="btn danger ghost" onclick="loadSampleData(true)">Reset to sample list</button>
       <button class="btn danger ghost" onclick="clearPriceList()">Clear price list (start empty)</button>
     </div>
+    <div class="mrow" style="margin-top:12px">
+      <input id="plistSearch" placeholder="Search brand or model…" oninput="renderPlist()" style="width:100%">
+    </div>
+    <div class="pref-btns" id="plistBrandPills" style="margin-top:8px"></div>
   </div>
   <div id="plistBox"></div>
 </div>
@@ -980,12 +984,24 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <div class="mrow"><label class="hint">Category</label><select id="miCat" onchange="syncCategoryFieldsVisibility()"></select></div>
     <div class="mrow"><label class="hint">Brand</label><input id="miBrand" placeholder="e.g. Denon"></div>
     <div class="mrow"><label class="hint">Model</label><input id="miModel" placeholder="e.g. AVR-X2800H"></div>
-    <div class="row">
-      <div class="field"><label>Unit price (₹)</label><input id="miPrice" type="number" inputmode="numeric"></div>
+    <div class="mrow">
+      <label class="hint">Pricing entry <span class="hint" style="text-transform:none">— however you actually get this product priced</span></label>
+      <div class="pref-btns">
+        <button type="button" class="pref-btn on" data-mode="markup" onclick="setPricingMode('markup')">My cost + markup</button>
+        <button type="button" class="pref-btn" data-mode="mrpDiscount" onclick="setPricingMode('mrpDiscount')">MRP + distributor discount</button>
+      </div>
+    </div>
+    <div class="row" id="miMarkupModeRow">
+      <div class="field"><label>Unit price (₹) <span class="hint" style="text-transform:none">— your cost</span></label><input id="miPrice" type="number" inputmode="numeric"></div>
       <div class="field" style="flex:0"><label>Qty</label><input id="miQty" type="number" value="1" min="1" style="width:80px"></div>
     </div>
+    <div class="row" id="miMrpModeRow" style="display:none">
+      <div class="field"><label>MRP (₹)</label><input id="miMrp" type="number" inputmode="numeric" oninput="syncMrpDiscountPreview()"></div>
+      <div class="field" style="flex:0"><label>Qty</label><input id="miQtyMrp" type="number" value="1" min="1" style="width:80px"></div>
+    </div>
     <div class="row" style="align-items:end">
-      <div class="field"><label>Margin %</label><input id="miMargin" type="number" min="0" step="0.5" placeholder="e.g. 15" value="0"></div>
+      <div class="field" id="miMarkupMarginField"><label>Margin %</label><input id="miMargin" type="number" min="0" step="0.5" placeholder="e.g. 15" value="0"></div>
+      <div class="field" id="miMrpDiscountField" style="display:none"><label>Distributor discount %</label><input id="miDistributorDiscount" type="number" min="0" max="99" step="0.5" placeholder="e.g. 45" oninput="syncMrpDiscountPreview()"></div>
       <div class="field" style="flex:0">
         <label>GST rate</label>
         <select id="miGstRate" style="width:110px">
@@ -997,6 +1013,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </select>
       </div>
     </div>
+    <p class="hint" id="miMrpDiscountPreview" style="margin-top:-6px"></p>
     <p class="hint" style="margin-top:5px;margin-bottom:10px">Margin adds on top of unit price for the actual quote. GST rate only needs setting if this item differs from the quote's usual rate.</p>
     <div class="row" style="align-items:center">
       <div class="field" style="flex:0">
@@ -2137,6 +2154,69 @@ function checkPoweramplChannelShortfall(sel, ch){
   if(have < gap) return `${it.brand} ${it.model} is only ${have}ch — needs ${gap}+ channels to cover the AVR's pre-out gap, no bigger unit found in your price list`;
   return null;
 }
+// Room volume (cu ft) -> minimum recommended COMBINED subwoofer RMS power. Bass output needs to
+// scale with cubic volume, not floor area — a large or open room loses the natural bass
+// reinforcement ("room gain") a small sealed room gets for free, so it needs genuinely more
+// moving-air capacity to reach the same perceived level, not just a bigger-looking box.
+const SUB_POWER_TIERS = [
+  { maxVolume: 2000,     minWatts: 150 },
+  { maxVolume: 3500,     minWatts: 250 },
+  { maxVolume: 5500,     minWatts: 400 },
+  { maxVolume: 8000,     minWatts: 700 },
+  { maxVolume: Infinity, minWatts: 1000 },
+];
+function roomVolumeCuFt(){
+  const W = +document.getElementById('clientRoomWidth').value || 0;
+  const L = +document.getElementById('clientRoomLength').value || 0;
+  const H = +document.getElementById('clientRoomHeight').value || 0;
+  return W*L*H;
+}
+function minSubPowerForVolume(volumeCuFt){
+  return SUB_POWER_TIERS.find(t => volumeCuFt <= t.maxVolume).minWatts;
+}
+// Soft warning only (money matters, but the room shouldn't end up under-powered) — this never
+// blocks a selection, it just flags when the selected sub(s) fall short of what the room's own
+// volume typically calls for, the same way an AVR channel shortfall gets flagged rather than blocked.
+function checkSubwooferPowerAdequacy(sel, subCount){
+  const volume = roomVolumeCuFt();
+  if(!volume) return null; // no room dimensions set yet — nothing to check against
+  const subId = sel && sel.sub;
+  if(!subId) return null;
+  const subItem = items.find(i=>i.id===subId);
+  if(!subItem || subItem.rmsPower==null) return null; // no power spec entered — can't check
+  const count = Math.max(1, subCount||1);
+  const combinedWatts = subItem.rmsPower * count;
+  const minNeeded = minSubPowerForVolume(volume);
+  if(combinedWatts < minNeeded){
+    const shortBy = minNeeded - combinedWatts;
+    return `Room is ~${Math.round(volume).toLocaleString('en-IN')} cu ft — typically wants ${minNeeded}W+ combined sub output. Selected: ${count}× ${subItem.rmsPower}W = ${combinedWatts}W, short by ${shortBy}W. Consider a higher-power sub or an additional unit.`;
+  }
+  return null;
+}
+// Checks the amp's actual per-channel RMS power against the selected speakers' safe power
+// handling range, and impedance compatibility — a genuine technical mismatch, not a preference.
+// Underpowered risks sounding thin/clipping; overpowered risks damaging the speaker at real volume.
+function checkAmpSpeakerCompatibility(sel){
+  const ampItem = centralUnitItem(sel);
+  if(!ampItem || ampItem.rmsPower==null) return null;
+  const ampRms = ampItem.rmsPower, ampImpedance = ampItem.ratedImpedance;
+  for(const catId of MOUNT_CATS){
+    const spkId = sel[catId];
+    if(!spkId) continue;
+    const spk = items.find(i=>i.id===spkId);
+    if(!spk) continue;
+    if(spk.powerHandlingMin!=null && ampRms < spk.powerHandlingMin){
+      return `${spk.brand} ${spk.model} (${catId}) needs ${spk.powerHandlingMin}W+ but ${ampItem.brand} ${ampItem.model} only delivers ${ampRms}W/ch — may sound thin or clip at volume`;
+    }
+    if(spk.powerHandlingMax!=null && ampRms > spk.powerHandlingMax){
+      return `${ampItem.brand} ${ampItem.model} delivers ${ampRms}W/ch, above ${spk.brand} ${spk.model}'s (${catId}) ${spk.powerHandlingMax}W max handling — risk of damage at high volume`;
+    }
+    if(ampImpedance!=null && spk.impedance!=null && spk.impedance < ampImpedance){
+      return `${spk.brand} ${spk.model} (${catId}) is ${spk.impedance}Ω, ${ampItem.brand} ${ampItem.model} is rated at ${ampImpedance}Ω — lower-impedance speakers draw more current than the amp is rated for`;
+    }
+  }
+  return null;
+}
 function brandsInCat(catId){
   return [...new Set(catItems(catId).map(it=>it.brand))].sort((a,b)=>a.localeCompare(b));
 }
@@ -2634,6 +2714,8 @@ function generate(){
   const missed = checkBrandFallbacks(sel);
   const avrIssue = checkAvrChannelShortfall(sel, ch);
   const poweramplIssue = checkPoweramplChannelShortfall(sel, ch);
+  const subPowerIssue = checkSubwooferPowerAdequacy(sel, subCount);
+  const ampSpeakerIssue = checkAmpSpeakerCompatibility(sel);
   const psIssues = checkProjScreenFallback(sel);
   const speakerStyleIssue = checkSpeakerStyleFallback(sel);
   const moreIssues = checkMoreFiltersFallback(sel);
@@ -2642,6 +2724,8 @@ function generate(){
   if(installPct>0) msg += ` + ${fmt(services[0].rate)} install`;
   if(avrIssue) msg += ` — ⚠ ${avrIssue}`;
   else if(poweramplIssue) msg += ` — ⚠ ${poweramplIssue}`;
+  else if(subPowerIssue) msg += ` — ⚠ ${subPowerIssue}`;
+  else if(ampSpeakerIssue) msg += ` — ⚠ ${ampSpeakerIssue}`;
   else if(speakerStyleIssue) msg += ` — ⚠ ${speakerStyleIssue}`;
   else if(psIssues.length) msg += ` — ⚠ ${psIssues[0]}`;
   else if(moreIssues.length) msg += ` — ⚠ ${moreIssues[0]}`;
@@ -2826,7 +2910,10 @@ function renderQuote(){
   });
 
   const avrWarnEl = document.getElementById('avrChannelWarning');
-  const avrWarn = checkAvrChannelShortfall(quote.selections, ch);
+  const avrWarn = checkAvrChannelShortfall(quote.selections, ch)
+    || checkPoweramplChannelShortfall(quote.selections, ch)
+    || checkSubwooferPowerAdequacy(quote.selections, quote.subCount)
+    || checkAmpSpeakerCompatibility(quote.selections);
   if(avrWarn){
     avrWarnEl.style.display = 'flex';
     avrWarnEl.className = 'quote-warning';
@@ -3948,12 +4035,20 @@ function highlightPricelistItem(id){
     row.classList.add('just-saved');
   });
 }
+let plistBrandFilter = null;
 function renderPlist(){
   const box=document.getElementById('plistBox'); box.innerHTML='';
+  const searchEl = document.getElementById('plistSearch');
+  const search = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const filtering = !!(search || plistBrandFilter);
+  renderPlistBrandPills();
   cats.forEach(c=>{
-    const list=catItems(c.id);
+    let list=catItems(c.id);
+    if(plistBrandFilter) list = list.filter(it=>it.brand===plistBrandFilter);
+    if(search) list = list.filter(it=> (it.brand+' '+it.model).toLowerCase().includes(search) || c.name.toLowerCase().includes(search));
+    if(filtering && list.length===0) return; // hide categories with no matches while actively searching/filtering
     const custom = isCustomCategory(c.id);
-    const g=document.createElement('div'); g.className='cat-group';
+    const g=document.createElement('div'); g.className='cat-group'+(filtering?' open':'');
     g.innerHTML = `
       <div class="cat-head" onclick="this.parentElement.classList.toggle('open')">
         <span class="cat-icon">${catIcon(c.id)}</span><h3>${c.name}${custom?' <span class="hint" style="text-transform:none;font-weight:400">· custom</span>':''}</h3><span class="cnt">${list.length} models</span>
@@ -3975,7 +4070,23 @@ function renderPlist(){
       </div>`;
     box.appendChild(g);
   });
+  if(filtering && !box.children.length){
+    box.innerHTML = `<div class="card"><p class="hint">No products match${search?` "${search}"`:''}${plistBrandFilter?` for ${plistBrandFilter}`:''}.</p></div>`;
+  }
   if(typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
+}
+// One pill per distinct brand across the whole catalog, plus "All" to clear — tap to filter the
+// price list down to just that brand, which combines with the text search above it.
+function renderPlistBrandPills(){
+  const box = document.getElementById('plistBrandPills');
+  if(!box) return;
+  const brands = [...new Set(items.map(i=>i.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  box.innerHTML = `<button type="button" class="pref-btn${plistBrandFilter?'':' on'}" onclick="setPlistBrandFilter(null)">All</button>` +
+    brands.map(b=>`<button type="button" class="pref-btn${plistBrandFilter===b?' on':''}" onclick="setPlistBrandFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
+}
+function setPlistBrandFilter(brand){
+  plistBrandFilter = plistBrandFilter===brand ? null : brand; // tapping the active pill again clears it
+  renderPlist();
 }
 let editingId=null;
 const STANDARD_SCREEN_SIZES = [84,92,100,106,110,120,125,133,135,150,165,180,200,220,240,250];
@@ -4015,6 +4126,30 @@ function syncZoomRatioPreview(){
   el.style.color = '';
   el.textContent = `Zoom ratio: ${(tmax/tmin).toFixed(2)}x`;
 }
+// Two ways dealers actually get pricing: "my cost + my markup" (the app's native representation),
+// or "MRP + the discount my distributor gives me off it" — the more common real-world convention,
+// where the margin is a discount FROM the distributor, not a markup added on top for the client.
+// Both convert to the same internal price/marginPct so every other calculation in the app (profit
+// breakdown, quote totals, Excel) needs zero changes — this only affects how the number gets typed in.
+function setPricingMode(mode){
+  document.querySelectorAll('#itemModalBg [data-mode]').forEach(b=> b.classList.toggle('on', b.dataset.mode===mode));
+  document.getElementById('miMarkupModeRow').style.display = mode==='markup' ? 'flex' : 'none';
+  document.getElementById('miMrpModeRow').style.display = mode==='mrpDiscount' ? 'flex' : 'none';
+  document.getElementById('miMarkupMarginField').style.display = mode==='markup' ? 'block' : 'none';
+  document.getElementById('miMrpDiscountField').style.display = mode==='mrpDiscount' ? 'block' : 'none';
+  document.getElementById('itemModalBg').dataset.pricingMode = mode;
+  syncMrpDiscountPreview();
+}
+function syncMrpDiscountPreview(){
+  const el = document.getElementById('miMrpDiscountPreview');
+  if(!el) return;
+  if(document.getElementById('itemModalBg').dataset.pricingMode !== 'mrpDiscount'){ el.textContent=''; return; }
+  const mrp = +document.getElementById('miMrp').value || 0;
+  const disc = +document.getElementById('miDistributorDiscount').value || 0;
+  if(!mrp){ el.textContent = ''; return; }
+  const cost = mrp * (1 - disc/100);
+  el.textContent = `Your cost: ${fmt(cost)} · Client sees: ${fmt(mrp)}`;
+}
 // Swaps the explanatory line under the Tax Inclusive switch so it always states plainly what
 // the current position means, rather than making the installer infer it from the toggle alone.
 function syncTaxHint(){
@@ -4040,6 +4175,10 @@ function openItemModal(id){
     document.getElementById('miPrice').value=it.price;
     document.getElementById('miQty').value=it.qty;
     document.getElementById('miMargin').value=it.marginPct||0;
+    document.getElementById('miMrp').value=it.mrp!=null?it.mrp:'';
+    document.getElementById('miQtyMrp').value=it.qty;
+    document.getElementById('miDistributorDiscount').value=it.distributorDiscountPct!=null?it.distributorDiscountPct:'';
+    setPricingMode(it.pricingMode==='mrpDiscount' ? 'mrpDiscount' : 'markup');
     document.getElementById('miTaxInclusive').checked=it.taxInclusive!==false;
     document.getElementById('miGstRate').value=it.gstRate!=null?it.gstRate:'';
     syncTaxHint();
@@ -4079,6 +4218,10 @@ function openItemModal(id){
     document.getElementById('miModel').value='';
     document.getElementById('miPrice').value='';
     document.getElementById('miQty').value=1;
+    document.getElementById('miMrp').value='';
+    document.getElementById('miQtyMrp').value=1;
+    document.getElementById('miDistributorDiscount').value='';
+    setPricingMode('markup');
     document.getElementById('miMargin').value=0;
     document.getElementById('miTaxInclusive').checked=true;
     document.getElementById('miGstRate').value='';
@@ -4167,9 +4310,19 @@ function saveItem(){
   const cat=document.getElementById('miCat').value;
   const brand=document.getElementById('miBrand').value.trim();
   const model=document.getElementById('miModel').value.trim();
-  const price=+document.getElementById('miPrice').value;
-  const qty=Math.max(1,+document.getElementById('miQty').value||1);
-  const marginPct=Math.max(0,+document.getElementById('miMargin').value||0);
+  const pricingMode = document.getElementById('itemModalBg').dataset.pricingMode || 'markup';
+  let price, qty, marginPct, mrpVal=null, distributorDiscountPct=null;
+  if(pricingMode==='mrpDiscount'){
+    mrpVal = +document.getElementById('miMrp').value || 0;
+    distributorDiscountPct = Math.max(0, Math.min(99, +document.getElementById('miDistributorDiscount').value||0));
+    qty = Math.max(1, +document.getElementById('miQtyMrp').value||1);
+    price = mrpVal * (1 - distributorDiscountPct/100); // your actual cost after the distributor's discount
+    marginPct = price>0 ? (mrpVal/price - 1)*100 : 0;  // the markup that exactly reproduces MRP as the client's price
+  } else {
+    price = +document.getElementById('miPrice').value;
+    qty = Math.max(1,+document.getElementById('miQty').value||1);
+    marginPct = Math.max(0,+document.getElementById('miMargin').value||0);
+  }
   const taxInclusive=document.getElementById('miTaxInclusive').checked;
   const gstRateVal=document.getElementById('miGstRate').value;
   const gstRate=gstRateVal===''?null:+gstRateVal;
@@ -4203,7 +4356,7 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode,mrp:mrpVal,distributorDiscountPct};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
@@ -4256,7 +4409,8 @@ function clearPriceList(){
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
   const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance']];
-  items.forEach(i=> rows.push([i.cat, i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'']));
+  const catName = cid => (cats.find(c=>c.id===cid)||{}).name || cid;
+  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
