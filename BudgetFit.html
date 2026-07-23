@@ -898,7 +898,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <button class="btn danger ghost" onclick="clearPriceList()">Clear price list (start empty)</button>
     </div>
     <div class="mrow" style="margin-top:12px">
-      <input id="plistSearch" placeholder="Search brand or model…" oninput="renderPlist()" style="width:100%">
+      <input id="plistSearch" placeholder="Search brand or model…" oninput="renderPlist(true)" style="width:100%">
     </div>
     <div class="pref-btns" id="plistBrandPills" style="margin-top:8px"></div>
   </div>
@@ -984,24 +984,23 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <div class="mrow"><label class="hint">Category</label><select id="miCat" onchange="syncCategoryFieldsVisibility()"></select></div>
     <div class="mrow"><label class="hint">Brand</label><input id="miBrand" placeholder="e.g. Denon"></div>
     <div class="mrow"><label class="hint">Model</label><input id="miModel" placeholder="e.g. AVR-X2800H"></div>
-    <div class="mrow">
-      <label class="hint">Pricing entry <span class="hint" style="text-transform:none">— however you actually get this product priced</span></label>
-      <div class="pref-btns">
-        <button type="button" class="pref-btn on" data-mode="markup" onclick="setPricingMode('markup')">My cost + markup</button>
-        <button type="button" class="pref-btn" data-mode="mrpDiscount" onclick="setPricingMode('mrpDiscount')">MRP + distributor discount</button>
-      </div>
+    <div class="mrow"><label class="hint">Sold as <span class="hint" style="text-transform:none">— most in-wall/in-ceiling speakers sell each, most floorstanding/bookshelf sell as a pair, but check the datasheet either way</span></label>
+      <select id="miUnitType">
+        <option value="each">Each</option>
+        <option value="pair">Pair</option>
+        <option value="set">Set</option>
+        <option value="kit">Kit</option>
+        <option value="box">Box</option>
+        <option value="spool">Spool</option>
+        <option value="lot">Lot</option>
+      </select>
     </div>
-    <div class="row" id="miMarkupModeRow">
-      <div class="field"><label>Unit price (₹) <span class="hint" style="text-transform:none">— your cost</span></label><input id="miPrice" type="number" inputmode="numeric"></div>
-      <div class="field" style="flex:0"><label>Qty</label><input id="miQty" type="number" value="1" min="1" style="width:80px"></div>
-    </div>
-    <div class="row" id="miMrpModeRow" style="display:none">
+    <div class="row">
       <div class="field"><label>MRP (₹)</label><input id="miMrp" type="number" inputmode="numeric" oninput="syncMrpDiscountPreview()"></div>
       <div class="field" style="flex:0"><label>Qty</label><input id="miQtyMrp" type="number" value="1" min="1" style="width:80px"></div>
     </div>
     <div class="row" style="align-items:end">
-      <div class="field" id="miMarkupMarginField"><label>Margin %</label><input id="miMargin" type="number" min="0" step="0.5" placeholder="e.g. 15" value="0"></div>
-      <div class="field" id="miMrpDiscountField" style="display:none"><label>Distributor discount %</label><input id="miDistributorDiscount" type="number" min="0" max="99" step="0.5" placeholder="e.g. 45" oninput="syncMrpDiscountPreview()"></div>
+      <div class="field"><label>Distributor discount %</label><input id="miDistributorDiscount" type="number" min="0" max="99" step="0.5" placeholder="e.g. 45" oninput="syncMrpDiscountPreview()"></div>
       <div class="field" style="flex:0">
         <label>GST rate</label>
         <select id="miGstRate" style="width:110px">
@@ -1013,8 +1012,8 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </select>
       </div>
     </div>
-    <p class="hint" id="miMrpDiscountPreview" style="margin-top:-6px"></p>
-    <p class="hint" style="margin-top:5px;margin-bottom:10px">Margin adds on top of unit price for the actual quote. GST rate only needs setting if this item differs from the quote's usual rate.</p>
+    <p class="hint" id="miMrpDiscountPreview" style="margin-top:10px"></p>
+    <p class="hint" style="margin-top:5px;margin-bottom:10px">GST rate only needs setting if this item differs from the quote's usual rate.</p>
     <div class="row" style="align-items:center">
       <div class="field" style="flex:0">
         <label class="switch">
@@ -1353,16 +1352,20 @@ const SAMPLE_ITEMS = [
   ['surrounds','Klipsch','RP-500M II (pair)',46000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],['surrounds','KEF','Q150 (pair)',52000,1,undefined,undefined,undefined,undefined,undefined,'satellite'],
   ['surrounds','Episode','6.5in In-Ceiling (pair)',28000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
   ['surrounds','Sonance','Reference R1CS In-Ceiling (pair)',58000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
+  ['surrounds','Episode','700 Series In-Wall Surround (pair)',52000,1,undefined,undefined,undefined,undefined,undefined,'inwall'],
   // atmos (pair)
   ['atmos','Polk','RC80i In-ceiling (pair)',16000,1,undefined,undefined,undefined,undefined,undefined,'inceiling'],
   ['atmos','Klipsch','CDT-5650-C II In-ceiling',24000,2,undefined,undefined,undefined,undefined,undefined,'inceiling'],
   ['atmos','Polk','ES90 Height Modules (pair)',26000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
   ['atmos','Klipsch','RP-500SA II (pair)',42000,1,undefined,undefined,undefined,undefined,undefined,'bookshelf'],
+  ['atmos','KEF','Ci200QR Satellite Atmos (pair)',38000,1,undefined,undefined,undefined,undefined,undefined,'satellite'],
   // sub
   ['sub','Polk','HTS-10',34000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',10],
   ['sub','Klipsch','R-121SW',42000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',12],
   ['sub','SVS','PB-1000 Pro',65000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',12],
   ['sub','SVS','PB-2000 Pro',95000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',12],
+  ['sub','Generic','15in Powered Subwoofer',145000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',15],
+  ['sub','Generic','18in Powered Subwoofer',195000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'Powered',18],
   // htib — all-in-one home theater packages (replaces LCR + surround + sub; some include the AVR)
   ['htib','Sony','HT-S40R 5.1ch',34000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'5.1 all-in-one soundbar'],['htib','Samsung','HW-Q800C 5.1.2 Soundbar',72000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'5.1.2 Dolby Atmos soundbar'],
   ['htib','Sony','HT-A7000 + rear + sub',150000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'7.1.2 soundbar + wireless rears + sub'],['htib','Klipsch','Reference Theater Pack 5.1',95000,1,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined,'5.1 component-style all-in-one'],
@@ -1519,14 +1522,16 @@ function cf(field){ return (quote && quote.client && quote.client[field]) || '';
 // this for the final bill, and generate() uses the SAME function to size the installation fee
 // correctly, instead of the allocator's raw pre-tax figure which doesn't know about exclusive
 // items needing GST added on top.
-function computeEquipmentTotals(sel, ch, htibMode, subCount, gstRate){
+function computeEquipmentTotals(sel, ch, htibMode, subCount, gstRate, qtyOverrides){
+  const overrides = qtyOverrides || {};
   let equipTotal=0, equipTaxable=0, equipGst=0;
   const lines=[];
   cats.filter(c=>c.enabled && sel[c.id] && catAllowed(c.id,{selections:sel,htib:htibMode},ch) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
     const it = items.find(i=>i.id===sel[c.id]);
     if(!it) return;
-    const mult = multFor(c.id,ch,htibMode,subCount);
-    const sellSubtotal = qeff(it,ch,htibMode,subCount);
+    const baseMult = multFor(c.id,ch,htibMode,subCount);
+    const mult = c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
+    const sellSubtotal = eff(it) * mult;
     const inclusive = it.taxInclusive !== false;
     const lineGstRate = it.gstRate!=null ? it.gstRate : gstRate;
     const lineGross = inclusive ? sellSubtotal : sellSubtotal * (1 + lineGstRate/100);
@@ -1544,7 +1549,7 @@ function computeQuoteTotals(q){
   const htibMode = !!q.htib;
   const subCount = Math.max(1, q.subCount||1);
   const gstRate = (q.gstRate!=null) ? +q.gstRate : 18;
-  const { equipTotal, equipTaxable, equipGst, lines } = computeEquipmentTotals(q.selections, ch, htibMode, subCount, gstRate);
+  const { equipTotal, equipTaxable, equipGst, lines } = computeEquipmentTotals(q.selections, ch, htibMode, subCount, gstRate, q.qtyOverrides);
   // Service / labour / other non-equipment lines (installation, cabling, calibration, travel, etc.).
   // These are fixed amounts entered by the user — the budget-allocation engine never touches them.
   const services = (q.services||[]).filter(s=>s && s.desc);
@@ -1643,7 +1648,8 @@ function mkItem(a){ return {id:'i'+(++uid), cat:a[0], brand:a[1], model:a[2], pr
   marginPct:a[23]!=null?+a[23]:0, taxInclusive:a[24]!=null?!!a[24]:true, gstRate:a[25]!=null?+a[25]:null, preoutChannels:a[26]!=null?+a[26]:null,
   aspectRatio:a[27]||null, throwRatioMin:a[28]!=null?+a[28]:null, throwRatioMax:a[29]!=null?+a[29]:null,
   rmsPower:a[30]!=null?+a[30]:null, sensitivity:a[31]!=null?+a[31]:null, powerHandlingMin:a[32]!=null?+a[32]:null,
-  powerHandlingMax:a[33]!=null?+a[33]:null, impedance:a[34]!=null?+a[34]:null, ratedImpedance:a[35]!=null?+a[35]:null}; }
+  powerHandlingMax:a[33]!=null?+a[33]:null, impedance:a[34]!=null?+a[34]:null, ratedImpedance:a[35]!=null?+a[35]:null,
+  unitType:a[36]||'each'}; }
 // Categories with a rich structured attribute already (channels, screen fields, mounting, cable
 // gauge, etc) don't need the generic Variant field — everyone else gets it, so nothing is left
 // with genuinely no sub-type/size field at all.
@@ -1753,7 +1759,38 @@ let quote = store.get('bf_quote') || null;   // {selections:{catId:itemId}, lock
 let settings = store.get('bf_settings') || null;
 let confirmedQuotes = store.get('bf_confirmed') || [];
 function nid(){ uid++; store.set('bf_uid',uid); return 'i'+uid; }
-function fmt(n){ return '₹' + Math.round(n).toLocaleString('en-IN'); }
+// Manual Indian-style number grouping (lakh/crore) instead of toLocaleString — measured ~9x
+// faster, which matters here since this runs twice per item (unit price + sell price) across
+// however many hundred products are in the price list, on every render.
+// Same GST set-off methodology as computeProfitBreakdown, applied to a single item — margin's
+// only real purpose is figuring out what you paid vs what you actually keep after GST, not
+// inflating the displayed price. No discount involved here since discount is a per-quote concept,
+// not something that applies to a raw price-list entry.
+function computeItemProfitDetail(it){
+  const qty = it.qty||1;
+  const sell = eff(it);
+  const cost = it.price * qty;
+  const inclusive = it.taxInclusive !== false;
+  const gstRate = it.gstRate!=null ? it.gstRate : 18;
+  const outputGst = inclusive ? (sell - sell/(1+gstRate/100)) : sell*gstRate/100;
+  const inputGst = inclusive ? (cost - cost/(1+gstRate/100)) : cost*gstRate/100;
+  const netGstPayable = Math.max(0, outputGst - inputGst);
+  const grossProfit = sell - cost;
+  const takeHome = grossProfit - netGstPayable;
+  return { cost, sell, grossProfit, outputGst, inputGst, netGstPayable, takeHome, gstRate };
+}
+function fmt(n){
+  n = Math.round(n);
+  const neg = n<0; if(neg) n=-n;
+  const s = String(n);
+  let grouped;
+  if(s.length<=3) grouped = s;
+  else {
+    const last3 = s.slice(-3), rest = s.slice(0,-3);
+    grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g,',') + ',' + last3;
+  }
+  return '₹' + (neg?'-':'') + grouped;
+}
 // Selling price = dealer/cost price with this item's own margin % applied. This MUST be where
 // margin gets applied (not just at display time) — the budget-fit allocator uses eff() to decide
 // what fits the budget, so if margin weren't baked in here, a generated quote would exceed the
@@ -1803,7 +1840,6 @@ function buildBackupPayload(){
     bf_settings: typeof settings!=='undefined' ? settings : undefined,
     bf_morefilterprefs: typeof moreFilterPrefs!=='undefined' ? moreFilterPrefs : undefined,
     bf_projscreenprefs: typeof projScreenPrefs!=='undefined' ? projScreenPrefs : undefined,
-    bf_speakerstyle: typeof speakerStylePref!=='undefined' ? speakerStylePref : undefined,
     bf_variantprefs: typeof variantPrefs!=='undefined' ? variantPrefs : undefined,
     bf_distributors: typeof distributors!=='undefined' ? distributors : undefined,
   };
@@ -2230,7 +2266,7 @@ let projScreenPrefs = { projRes:'', projLight:'', screenType:'', screenAT:'', sc
 // Same pattern as projScreenPrefs, for the sub-category attributes added afterward (TV size,
 // subwoofer type, HDMI spec, speaker cable gauge) — so ALL of Room's rich price-list attributes
 // actually filter what Generate Quote can pick, not just projector/screen.
-let moreFilterPrefs = { subType:'', hdmiSpec:'', hdmiLength:'', cableGauge:'', avrType:'', poweramplChannels:'', cableLength:'', avcableLength:'', netcableLength:'' };
+let moreFilterPrefs = { subType:'', hdmiSpec:'', hdmiLength:'', cableGauge:'', avrType:'', poweramplChannels:'', cableLength:'', avcableLength:'', netcableLength:'', frontsMount:'', centerMount:'', surroundsMount:'', atmosMount:'', subDriverSize:'' };
 // Generic filter for every category whose only sub-type field is the free-form Variant text
 // (HTiB, Source, AV Cables, Network Cable, Connectors, Power, Mounts, Acoustics, Seating,
 // Automation). Dropdown options are built from whatever variant values actually exist in the
@@ -2316,11 +2352,13 @@ function renderCategoryAttributesUI(){
     row('Home Theater in a Box', chips('caHtib',"setVariantPref('htib',this.dataset.val)",dynamicOptions('htib'),variantPrefs.htib,'Type')),
     row('AVR / Processor selection', chips('caAvrType',"setMoreFilterPref('avrType',this.dataset.val)",[['','Receiver (default)'],['processor','Processor']],moreFilterPrefs.avrType,'Use')),
     row('Power Amplifier', chips('caPoweramp',"setMoreFilterPref('poweramplChannels',this.dataset.val)",channelOptions('poweramp'),moreFilterPrefs.poweramplChannels,'Channels')),
-    row('Front L/R Speakers', chips('caStyleF',"setSpeakerStyle(this)",[['','Any'],['standard','Standard'],['architectural','Architectural']],speakerStylePref,'Style')),
-    row('Center Speaker', `<div class="hint">Uses the same Style control as Front L/R above</div>`),
-    row('Surround Speakers', `<div class="hint">Uses the same Style control as Front L/R above</div>`),
-    row('Atmos / Height Speakers', `<div class="hint">Uses the same Style control as Front L/R above — set a bookshelf model here and Architectural won't pick it, since it isn't in-wall/in-ceiling</div>`),
-    row('Subwoofer', chips('caSubType',"setMoreFilterPref('subType',this.dataset.val)",[['','Any'],['Powered','Powered'],['Passive','Passive']],moreFilterPrefs.subType,'Type')),
+    row('Front L/R Speakers', chips('caMountF',"setMoreFilterPref('frontsMount',this.dataset.val)",MOUNT_FILTER_OPTS,moreFilterPrefs.frontsMount,'Mount')),
+    row('Center Speaker', chips('caMountC',"setMoreFilterPref('centerMount',this.dataset.val)",MOUNT_FILTER_OPTS,moreFilterPrefs.centerMount,'Mount')),
+    row('Surround Speakers', chips('caMountS',"setMoreFilterPref('surroundsMount',this.dataset.val)",MOUNT_FILTER_OPTS,moreFilterPrefs.surroundsMount,'Mount')),
+    row('Atmos / Height Speakers', chips('caMountA',"setMoreFilterPref('atmosMount',this.dataset.val)",MOUNT_FILTER_OPTS,moreFilterPrefs.atmosMount,'Mount')),
+    row('Subwoofer',
+      chips('caSubType',"setMoreFilterPref('subType',this.dataset.val)",[['','Any'],['Powered','Powered'],['Passive','Passive']],moreFilterPrefs.subType,'Type') +
+      chips('caSubDriverSize',"setMoreFilterPref('subDriverSize',this.dataset.val)",[['','Any'],[8,'8"'],[10,'10"'],[12,'12"'],[15,'15"'],[18,'18"']],moreFilterPrefs.subDriverSize,'Driver size')),
     row('Media Player / Source', chips('caSource',"setVariantPref('source',this.dataset.val)",dynamicOptions('source'),variantPrefs.source,'Type')),
     row('Speaker Cabling (lot)',
       chips('caCableLength',"setMoreFilterPref('cableLength',this.dataset.val)",[['','Any'],[100,'100m'],[150,'150m'],[300,'300m']],moreFilterPrefs.cableLength,'Spool length') +
@@ -2372,8 +2410,9 @@ function setMoreFilterPref(key, value){
 }
 function catItemsForSub(){
   const all = catItemsPref('sub');
-  if(!moreFilterPrefs.subType) return all;
-  const opts = all.filter(o=> (o.subType||'Powered')===moreFilterPrefs.subType);
+  let opts = all;
+  if(moreFilterPrefs.subType) opts = opts.filter(o=> (o.subType||'Powered')===moreFilterPrefs.subType);
+  if(moreFilterPrefs.subDriverSize) { const filtered = opts.filter(o=> String(o.subDriverSize||'')===String(moreFilterPrefs.subDriverSize)); if(filtered.length) opts = filtered; }
   return opts.length ? opts : all;
 }
 function catItemsForHdmi(){
@@ -2508,43 +2547,31 @@ function checkProjScreenFallback(sel){
   return notes;
 }
 
-/* ---------------- speaker style (standard vs architectural in-wall/in-ceiling) ---------------- */
-let speakerStylePref = '';
-function saveSpeakerStylePref(){ store.set('bf_speakerstyle', speakerStylePref); }
-function loadSpeakerStylePref(){
-  const p = store.get('bf_speakerstyle');
-  speakerStylePref = p || '';
-  const container = document.getElementById('prefSpeakerStyle');
-  if(container) [...container.children].forEach(btn=> btn.classList.toggle('on', btn.dataset.val===speakerStylePref));
-}
-function setSpeakerStyle(btn){
-  speakerStylePref = btn.dataset.val;
-  document.querySelectorAll('#prefSpeakerStyle .pref-btn').forEach(b=> b.classList.toggle('on', b===btn));
-  saveSpeakerStylePref();
-  if(quote) generate();
-}
-// Architectural = in-wall or in-ceiling (the real industry term for built-in speakers); Standard =
-// freestanding/bookshelf. Falls back to the full brand-filtered list if nothing in the catalog
-// matches, same graceful-degrade pattern as every other preference filter.
+/* ---------------- speaker mount preference — independent per category ---------------- */
+// Each of Fronts/Center/Surrounds/Atmos gets its own mount-type filter now, instead of one shared
+// Standard/Architectural toggle controlling all four at once — floorstanding fronts, in-wall
+// surrounds, and satellite Atmos can all be true at the same time for the same quote.
+const MOUNT_FILTER_OPTS = [['','Any'],['floorstanding','Floor standing'],['bookshelf','Bookshelf'],['satellite','Satellite'],['inwall','In-wall'],['inceiling','In-ceiling']];
+// Falls back to the full brand-filtered list if nothing in the catalog matches this exact mount
+// type, same graceful-degrade pattern as every other preference filter in the app.
 function catItemsForSpeaker(catId){
   const all = catItemsPref(catId);
-  if(!MOUNT_CATS.includes(catId) || !speakerStylePref) return all;
-  let opts = all;
-  if(speakerStylePref==='architectural') opts = all.filter(it=> it.mountType==='inwall' || it.mountType==='inceiling');
-  if(speakerStylePref==='standard') opts = all.filter(it=> !it.mountType || !ARCHITECTURAL_MOUNTS.includes(it.mountType));
+  if(!MOUNT_CATS.includes(catId)) return all;
+  const pref = moreFilterPrefs[catId+'Mount'];
+  if(!pref) return all;
+  const opts = all.filter(it => it.mountType === pref);
   return opts.length ? opts : all;
 }
 function checkSpeakerStyleFallback(sel){
-  if(!speakerStylePref) return null;
-  const wantArch = speakerStylePref==='architectural';
-  const offenders = MOUNT_CATS.filter(cid=>{
-    const it = sel[cid] && items.find(i=>i.id===sel[cid]);
-    if(!it) return false;
-    const isArch = it.mountType==='inwall' || it.mountType==='inceiling';
-    return wantArch ? !isArch : isArch;
+  const notes = [];
+  MOUNT_CATS.forEach(catId=>{
+    const pref = moreFilterPrefs[catId+'Mount'];
+    if(!pref) return;
+    const it = sel[catId] && items.find(i=>i.id===sel[catId]);
+    if(!it) return;
+    if(it.mountType !== pref) notes.push(`no ${MOUNT_LABELS[pref]||pref} option found for ${catId} — used closest available`);
   });
-  if(!offenders.length) return null;
-  return `no ${wantArch?'architectural (in-wall/ceiling)':'standard'} option found for ${offenders.length===1?offenders[0]:offenders.length+' categories'} — used closest available`;
+  return notes.length ? notes.join('; ') : null;
 }
 
 // After an allocation, reports which preferred-brand categories couldn't actually be honoured
@@ -2704,7 +2731,7 @@ function generate(){
   const sameClient = quote && quote.client && quote.client.name === newClient.name;
   const prevConfirmedId = (quote && quote.confirmedId && sameClient) ? quote.confirmedId : null;
   const prevQuoteNo = (quote && quote.quoteNo && sameClient) ? quote.quoteNo : null;
-  quote = { selections:sel, locked:(quote&&quote.locked)||{}, discount:+disc.toFixed(2), budget:budgetInput, installPct, installMin, subCount, client:newClient,
+  quote = { selections:sel, locked:(quote&&quote.locked)||{}, qtyOverrides:(quote&&quote.qtyOverrides)||{}, discount:+disc.toFixed(2), budget:budgetInput, installPct, installMin, subCount, client:newClient,
     date:(quote&&quote.date)||new Date().toISOString().slice(0,10), maxDisc:maxDisc*100, channel:ch.id, htib:htibMode,
     services, gstRate:(quote&&quote.gstRate!=null)?quote.gstRate:18, quoteNo:prevQuoteNo, validityDays:(quote&&quote.validityDays)||15 };
   if(prevConfirmedId) quote.confirmedId = prevConfirmedId;
@@ -2887,15 +2914,22 @@ function renderQuote(){
   const htibMode = !!quote.htib;
   const subCount = Math.max(1, quote.subCount||1);
   syncSubCountUI(subCount);
+  quote.qtyOverrides = quote.qtyOverrides || {};
   cats.filter(c=>c.enabled && quote.selections[c.id] && catAllowed(c.id,quote) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
     const opts=catItems(c.id);
     const it=items.find(i=>i.id===quote.selections[c.id]);
     if(!it) return;
-    const mult = multFor(c.id, ch, htibMode, subCount);
+    const baseMult = multFor(c.id, ch, htibMode, subCount);
+    // Manual override only applies where the system isn't already deriving the count from the
+    // channel config (surrounds/atmos) or its own dedicated control (subwoofer has the count
+    // slider elsewhere) — everywhere else, the person ordering the system knows better than a
+    // formula whether they need an extra HDMI run, an extra wall plate, etc.
+    const overridable = baseMult===1 && c.id!=='sub';
+    const mult = overridable && quote.qtyOverrides[c.id]!=null ? quote.qtyOverrides[c.id] : baseMult;
     const locked = quote.locked && quote.locked[c.id];
     const totalQty = (it.qty||1)*mult;
     const multLabel = c.id==='sub' ? `×${mult} subs` : `×${mult} sets`;
-    const optLabel = o => `${o.brand} ${o.model}${itemAttrParen(o)} — ${fmt(qeff(o,ch,htibMode,subCount))}`;
+    const optLabel = o => `${o.brand} ${o.model}${itemAttrParen(o)} — ${fmt(eff(o)*mult)}`;
     const line=document.createElement('div'); line.className='qline';
     line.innerHTML = `
       <button class="lockbtn ${locked?'locked':''}" title="${locked?'Locked — kept on regenerate':'Tap to lock this pick'}" onclick="toggleLock('${c.id}')">${locked?'🔒':'🔓'}</button>
@@ -2904,8 +2938,15 @@ function renderQuote(){
         <div class="qsel"><select onchange="swapItem('${c.id}',this.value)">
           ${opts.map(o=>`<option value="${o.id}" ${o.id===it.id?'selected':''}>${optLabel(o)}</option>`).join('')}
         </select></div>
+        ${overridable ? `<div class="row" style="margin-top:6px;align-items:center;gap:8px">
+          <span class="hint" style="text-transform:none">Qty</span>
+          <button class="btn sm" style="padding:3px 11px" onclick="setQtyOverride('${c.id}',${mult-1})" ${mult<=1?'disabled':''}>−</button>
+          <span class="mono" style="min-width:18px;text-align:center">${mult}</span>
+          <button class="btn sm" style="padding:3px 11px" onclick="setQtyOverride('${c.id}',${mult+1})">+</button>
+          ${quote.qtyOverrides[c.id]!=null ? `<button class="btn sm ghost" onclick="setQtyOverride('${c.id}',null)">Reset</button>` : ''}
+        </div>` : ''}
       </div>
-      <div class="qprice">${fmt(qeff(it,ch,htibMode,subCount))}<small>${totalQty>1? totalQty+' × '+fmt(it.price) : '&nbsp;'}</small></div>`;
+      <div class="qprice">${fmt(eff(it)*mult)}<small>${totalQty>1? totalQty+' × '+fmt(it.price) : '&nbsp;'}</small></div>`;
     box.appendChild(line);
   });
 
@@ -2977,6 +3018,15 @@ function swapItem(cid, itemId){
 function toggleLock(cid){
   quote.locked = quote.locked||{};
   quote.locked[cid] = !quote.locked[cid];
+  store.set('bf_quote',quote); renderQuote();
+}
+// Manual per-line quantity override — null (or the Reset button) clears it back to whatever the
+// system would auto-compute. Floors at 1 rather than letting a line disappear via the stepper;
+// removing a category entirely is what the category toggle in Room is for, not this.
+function setQtyOverride(cid, val){
+  quote.qtyOverrides = quote.qtyOverrides || {};
+  if(val==null){ delete quote.qtyOverrides[cid]; }
+  else { quote.qtyOverrides[cid] = Math.max(1, val); }
   store.set('bf_quote',quote); renderQuote();
 }
 function setDiscount(v){
@@ -3136,10 +3186,12 @@ function computeProfitBreakdown(q){
   const ch = getChannel(q.channel), htibMode = !!q.htib, subCount = Math.max(1, q.subCount||1);
   const gstRateDefault = (q.gstRate!=null) ? +q.gstRate : 18;
   let costOfGoods = 0, inputGst = 0;
+  const overrides = q.qtyOverrides || {};
   cats.filter(c=>c.enabled && q.selections[c.id] && catAllowed(c.id,q,ch) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
     const it = items.find(i=>i.id===q.selections[c.id]);
     if(!it) return;
-    const mult = multFor(c.id,ch,htibMode,subCount);
+    const baseMult = multFor(c.id,ch,htibMode,subCount);
+    const mult = baseMult===1 && c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
     const rawLineCost = it.price * (it.qty||1) * mult; // raw dealer cost, margin excluded on purpose
     costOfGoods += rawLineCost;
     // GST you already paid your distributor when buying this item — same rate and inclusive/
@@ -4036,7 +4088,7 @@ function highlightPricelistItem(id){
   });
 }
 let plistBrandFilter = null;
-function renderPlist(){
+function renderPlist(skipCategoryAttrs){
   const box=document.getElementById('plistBox'); box.innerHTML='';
   const searchEl = document.getElementById('plistSearch');
   const search = searchEl ? searchEl.value.trim().toLowerCase() : '';
@@ -4048,18 +4100,19 @@ function renderPlist(){
     if(search) list = list.filter(it=> (it.brand+' '+it.model).toLowerCase().includes(search) || c.name.toLowerCase().includes(search));
     if(filtering && list.length===0) return; // hide categories with no matches while actively searching/filtering
     const custom = isCustomCategory(c.id);
+    const icon = catIcon(c.id);
     const g=document.createElement('div'); g.className='cat-group'+(filtering?' open':'');
     g.innerHTML = `
       <div class="cat-head" onclick="this.parentElement.classList.toggle('open')">
-        <span class="cat-icon">${catIcon(c.id)}</span><h3>${c.name}${custom?' <span class="hint" style="text-transform:none;font-weight:400">· custom</span>':''}</h3><span class="cnt">${list.length} models</span>
+        <span class="cat-icon">${icon}</span><h3>${c.name}${custom?' <span class="hint" style="text-transform:none;font-weight:400">· custom</span>':''}</h3><span class="cnt">${list.length} models</span>
         ${custom?`<button class="btn sm danger ghost" style="margin-left:6px;padding:4px 8px" title="Delete this category" onclick="event.stopPropagation();deleteCategory('${c.id}')">✕</button>`:''}
         <span style="color:var(--faint)">▾</span>
       </div>
       <div class="cat-body">
         ${list.length? list.map(it=>`
           <div class="item-row" data-item-id="${it.id}">
-            <span class="item-icon-badge">${catIcon(c.id)}</span>
-            <div class="item-name">${it.brand} ${it.model}<small>qty ${it.qty} · unit ${fmt(it.price)}${it.marginPct?` · +${it.marginPct}% margin`:''}${it.taxInclusive===false?' · Tax excl.':''}${it.gstRate!=null?` · ${it.gstRate}% GST`:''}${itemAttrTag(it)}</small></div>
+            <span class="item-icon-badge">${icon}</span>
+            <div class="item-name">${it.brand} ${it.model}${it.unitType&&it.unitType!=='each'?` <span class="hint" style="text-transform:capitalize">(${it.unitType})</span>`:''}<small>qty ${it.qty}${it.marginPct?(()=>{const p=computeItemProfitDetail(it);return ` · cost ${fmt(p.cost)} · profit ${fmt(p.takeHome)} (after ${p.gstRate}% GST set-off)`;})():` · unit ${fmt(it.price)}`}${it.taxInclusive===false?' · Tax excl.':''}${it.gstRate!=null?` · ${it.gstRate}% GST`:''}${itemAttrTag(it)}</small></div>
             <div style="text-align:right"><span class="brand-badge">${it.brand.toUpperCase()}</span><div class="item-price">${fmt(eff(it))}</div></div>
             <div style="display:flex;gap:6px">
               <button class="btn sm" onclick="openItemModal('${it.id}')">Edit</button>
@@ -4073,7 +4126,7 @@ function renderPlist(){
   if(filtering && !box.children.length){
     box.innerHTML = `<div class="card"><p class="hint">No products match${search?` "${search}"`:''}${plistBrandFilter?` for ${plistBrandFilter}`:''}.</p></div>`;
   }
-  if(typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
+  if(!skipCategoryAttrs && typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
 }
 // One pill per distinct brand across the whole catalog, plus "All" to clear — tap to filter the
 // price list down to just that brand, which combines with the text search above it.
@@ -4086,7 +4139,7 @@ function renderPlistBrandPills(){
 }
 function setPlistBrandFilter(brand){
   plistBrandFilter = plistBrandFilter===brand ? null : brand; // tapping the active pill again clears it
-  renderPlist();
+  renderPlist(true);
 }
 let editingId=null;
 const STANDARD_SCREEN_SIZES = [84,92,100,106,110,120,125,133,135,150,165,180,200,220,240,250];
@@ -4131,19 +4184,11 @@ function syncZoomRatioPreview(){
 // where the margin is a discount FROM the distributor, not a markup added on top for the client.
 // Both convert to the same internal price/marginPct so every other calculation in the app (profit
 // breakdown, quote totals, Excel) needs zero changes — this only affects how the number gets typed in.
-function setPricingMode(mode){
-  document.querySelectorAll('#itemModalBg [data-mode]').forEach(b=> b.classList.toggle('on', b.dataset.mode===mode));
-  document.getElementById('miMarkupModeRow').style.display = mode==='markup' ? 'flex' : 'none';
-  document.getElementById('miMrpModeRow').style.display = mode==='mrpDiscount' ? 'flex' : 'none';
-  document.getElementById('miMarkupMarginField').style.display = mode==='markup' ? 'block' : 'none';
-  document.getElementById('miMrpDiscountField').style.display = mode==='mrpDiscount' ? 'block' : 'none';
-  document.getElementById('itemModalBg').dataset.pricingMode = mode;
-  syncMrpDiscountPreview();
-}
+// MRP + distributor discount is the only pricing entry method now — this just shows what your
+// real cost and the client's price work out to, live, as you type.
 function syncMrpDiscountPreview(){
   const el = document.getElementById('miMrpDiscountPreview');
   if(!el) return;
-  if(document.getElementById('itemModalBg').dataset.pricingMode !== 'mrpDiscount'){ el.textContent=''; return; }
   const mrp = +document.getElementById('miMrp').value || 0;
   const disc = +document.getElementById('miDistributorDiscount').value || 0;
   if(!mrp){ el.textContent = ''; return; }
@@ -4172,13 +4217,21 @@ function openItemModal(id){
     selCat.value=it.cat;
     document.getElementById('miBrand').value=it.brand;
     document.getElementById('miModel').value=it.model;
-    document.getElementById('miPrice').value=it.price;
-    document.getElementById('miQty').value=it.qty;
-    document.getElementById('miMargin').value=it.marginPct||0;
-    document.getElementById('miMrp').value=it.mrp!=null?it.mrp:'';
+    document.getElementById('miUnitType').value=it.unitType||'each';
+    if(it.mrp!=null && it.distributorDiscountPct!=null){
+      document.getElementById('miMrp').value=it.mrp;
+      document.getElementById('miDistributorDiscount').value=it.distributorDiscountPct;
+    } else {
+      // Item predates this field, or was entered a different way — back-compute an equivalent
+      // MRP (the price the client actually sees) and the discount% that reproduces the same cost,
+      // so it still edits cleanly through this one form instead of showing blank/wrong fields.
+      const equivMrp = eff(it);
+      const equivDiscount = equivMrp>0 ? Math.max(0, (1 - it.price/equivMrp)*100) : 0;
+      document.getElementById('miMrp').value = Math.round(equivMrp*100)/100;
+      document.getElementById('miDistributorDiscount').value = Math.round(equivDiscount*100)/100;
+    }
     document.getElementById('miQtyMrp').value=it.qty;
-    document.getElementById('miDistributorDiscount').value=it.distributorDiscountPct!=null?it.distributorDiscountPct:'';
-    setPricingMode(it.pricingMode==='mrpDiscount' ? 'mrpDiscount' : 'markup');
+    syncMrpDiscountPreview();
     document.getElementById('miTaxInclusive').checked=it.taxInclusive!==false;
     document.getElementById('miGstRate').value=it.gstRate!=null?it.gstRate:'';
     syncTaxHint();
@@ -4216,13 +4269,11 @@ function openItemModal(id){
   } else {
     document.getElementById('miBrand').value='';
     document.getElementById('miModel').value='';
-    document.getElementById('miPrice').value='';
-    document.getElementById('miQty').value=1;
+    document.getElementById('miUnitType').value='each';
     document.getElementById('miMrp').value='';
     document.getElementById('miQtyMrp').value=1;
     document.getElementById('miDistributorDiscount').value='';
-    setPricingMode('markup');
-    document.getElementById('miMargin').value=0;
+    document.getElementById('miMrpDiscountPreview').textContent='';
     document.getElementById('miTaxInclusive').checked=true;
     document.getElementById('miGstRate').value='';
     syncTaxHint();
@@ -4310,19 +4361,12 @@ function saveItem(){
   const cat=document.getElementById('miCat').value;
   const brand=document.getElementById('miBrand').value.trim();
   const model=document.getElementById('miModel').value.trim();
-  const pricingMode = document.getElementById('itemModalBg').dataset.pricingMode || 'markup';
-  let price, qty, marginPct, mrpVal=null, distributorDiscountPct=null;
-  if(pricingMode==='mrpDiscount'){
-    mrpVal = +document.getElementById('miMrp').value || 0;
-    distributorDiscountPct = Math.max(0, Math.min(99, +document.getElementById('miDistributorDiscount').value||0));
-    qty = Math.max(1, +document.getElementById('miQtyMrp').value||1);
-    price = mrpVal * (1 - distributorDiscountPct/100); // your actual cost after the distributor's discount
-    marginPct = price>0 ? (mrpVal/price - 1)*100 : 0;  // the markup that exactly reproduces MRP as the client's price
-  } else {
-    price = +document.getElementById('miPrice').value;
-    qty = Math.max(1,+document.getElementById('miQty').value||1);
-    marginPct = Math.max(0,+document.getElementById('miMargin').value||0);
-  }
+  const mrpVal = +document.getElementById('miMrp').value || 0;
+  const distributorDiscountPct = Math.max(0, Math.min(99, +document.getElementById('miDistributorDiscount').value||0));
+  const qty = Math.max(1, +document.getElementById('miQtyMrp').value||1);
+  const price = mrpVal * (1 - distributorDiscountPct/100); // your actual cost after the distributor's discount
+  const marginPct = price>0 ? (mrpVal/price - 1)*100 : 0;  // the markup that exactly reproduces MRP as the client's price
+  const unitType = document.getElementById('miUnitType').value || 'each';
   const taxInclusive=document.getElementById('miTaxInclusive').checked;
   const gstRateVal=document.getElementById('miGstRate').value;
   const gstRate=gstRateVal===''?null:+gstRateVal;
@@ -4356,7 +4400,7 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode,mrp:mrpVal,distributorDiscountPct};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode:'mrpDiscount',mrp:mrpVal,distributorDiscountPct,unitType};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
@@ -4408,9 +4452,9 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance']];
+  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
   const catName = cid => (cats.find(c=>c.id===cid)||{}).name || cid;
-  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'']));
+  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -4482,6 +4526,7 @@ function importXLSX(inp){
         aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
         rmspower:head.indexOf('rmspower'), ratedimpedance:head.indexOf('ratedimpedance'), sensitivity:head.indexOf('sensitivity'),
         powerhandlingmin:head.indexOf('powerhandlingmin'), powerhandlingmax:head.indexOf('powerhandlingmax'), impedance:head.indexOf('impedance'),
+        unittype:head.indexOf('unittype'),
         cablelength:head.indexOf('cablelength'), cablegauge:head.indexOf('cablegauge'),
         hdmilength:head.indexOf('hdmilength'), hdmispec:head.indexOf('hdmispec'), tvsize:head.indexOf('tvsize'),
         subtype:head.indexOf('subtype'), subdriversize:head.indexOf('subdriversize'), variant:head.indexOf('variant')};
@@ -4601,6 +4646,7 @@ function importNativeRows(rows, ix, inp){
     const powerHandlingMinImp = ix.powerhandlingmin>=0 && r[ix.powerhandlingmin]!=='' && r[ix.powerhandlingmin]!=null ? (+r[ix.powerhandlingmin]||null) : null;
     const powerHandlingMaxImp = ix.powerhandlingmax>=0 && r[ix.powerhandlingmax]!=='' && r[ix.powerhandlingmax]!=null ? (+r[ix.powerhandlingmax]||null) : null;
     const impedanceImp = ix.impedance>=0 && r[ix.impedance]!=='' && r[ix.impedance]!=null ? (+r[ix.impedance]||null) : null;
+    const unitTypeImp = ix.unittype>=0 && r[ix.unittype] ? String(r[ix.unittype]).trim().toLowerCase() : 'each';
     const existing = findExistingItem(cid, brand, model, {screenSize, aspectRatio: aspectRatioImp, cableLength, hdmiLength, subDriverSize, channels});
     if(existing){
       existing.price=price; existing.qty=qty;
@@ -4634,9 +4680,10 @@ function importNativeRows(rows, ix, inp){
       if(powerHandlingMinImp!=null) existing.powerHandlingMin=powerHandlingMinImp;
       if(powerHandlingMaxImp!=null) existing.powerHandlingMax=powerHandlingMaxImp;
       if(impedanceImp!=null) existing.impedance=impedanceImp;
+      existing.unitType=unitTypeImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
@@ -5513,7 +5560,6 @@ autoBackupIfDue();
 loadDistributors();
 loadInstallPrefs();
 loadProjScreenPrefs();
-loadSpeakerStylePref();
 loadMoreFilterPrefs();
 loadVariantPrefs();
 renderCategoryAttributesUI();
