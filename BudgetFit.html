@@ -224,9 +224,39 @@ header{position:sticky;top:0;z-index:40;background:rgba(243,244,250,.82);-webkit
 /* Room Plan tab: drawing stays pinned in view; everything else scrolls in its own pane below it,
    so you can see the plan update live while adjusting the configurator without scrolling back up. */
 #tab-roomplan.on{display:flex;flex-direction:column;height:calc(100vh - 155px);height:calc(100dvh - 155px);gap:10px}
+/* Desktop: side-by-side CAD-style layout instead of the mobile stacked one. Drawing takes the
+   majority of the width as a full-height column on the left; the configurator becomes a fixed,
+   independently-scrolling sidebar on the right, so it's a clean split rather than a tall page
+   with the drawing eating into the controls or vice versa. Mobile layout below this breakpoint
+   is completely unaffected — this is purely additive for wider screens. */
+@media(min-width:900px){
+  #tab-roomplan.on{flex-direction:row;align-items:stretch;gap:16px}
+  #tab-roomplan.on .rp-plan-card{flex:1 1 68%;min-width:0;display:flex;flex-direction:column;margin-bottom:0}
+  #tab-roomplan.on #roomPlanWrap{flex:1 1 auto;height:auto!important;min-height:0!important;max-height:none!important}
+  #tab-roomplan.on .rp-plan-card.rp-collapsed #roomPlanWrap{flex:0 0 96px!important}
+  #tab-roomplan.on .rp-scroll-area{flex:0 0 360px;max-width:360px;overflow-y:auto;padding-left:16px;border-left:1px solid var(--border)}
+}
 .rp-plan-card{flex:0 0 auto;margin-bottom:0}
 .rp-scroll-area{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:16px;overscroll-behavior:contain}
-#roomPlanWrap{background:var(--panel2);border-radius:10px;padding:10px;text-align:center;height:34vh;height:34dvh;min-height:220px;max-height:340px;display:flex;align-items:center;justify-content:center}
+#roomPlanWrap{background:var(--panel2);border-radius:10px;padding:10px;text-align:center;height:54vh;height:54dvh;min-height:340px;max-height:560px;display:flex;align-items:center;justify-content:center;transition:height .22s ease,min-height .22s ease}
+/* Collapsed state — the drawing shrinks to a small preview strip so the configurator below gets
+   real room to work in. Solves the exact tension of a big-by-default drawing on a fixed-height
+   mobile layout: you can't have both large AND leave space for the controls at the same time, so
+   let the person choose which one they need right now instead of permanently compromising both. */
+.rp-plan-card.rp-collapsed #roomPlanWrap{height:96px;min-height:96px;max-height:96px}
+.rp-plan-card.rp-collapsed .rp-zoom{display:none}
+#rpCollapseBtn{margin-left:auto}
+#rpCollapseBtn svg{transition:transform .18s ease}
+.rp-plan-card.rp-collapsed #rpCollapseBtn svg{transform:rotate(180deg)}
+/* View-mode pills — top-down / front / left / right / rear. Rounded, compact, matching the app's
+   established chip language rather than looking like generic rectangular buttons, since these are
+   the primary navigation for the drawing and deserve to read that way at a glance. */
+.rp-view-pill{padding:7px 15px;border-radius:20px;border:1.5px solid var(--border2);background:var(--panel);color:var(--muted);font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap}
+.rp-view-pill.on{background:var(--yellow);border-color:var(--yellow-deep);color:var(--near-black)}
+/* Hides only the static, purely-explanatory hint text under each control — dynamic informational
+   text (throw distance readout, angle feedback) is deliberately untagged and stays visible, since
+   that's live information, not a description someone might already know by heart. */
+#rpConfiguratorCard.rp-hide-desc .rp-desc-text{display:none}
 #roomPlanSvg{display:block;margin:0 auto;max-width:100%;max-height:100%;width:auto;height:100%}
 .rp-slider-row{display:grid;grid-template-columns:130px 1fr auto;gap:10px;align-items:center;margin-bottom:12px}
 .rp-slider-row label{font-size:12.5px;color:var(--ink);font-weight:500}
@@ -242,6 +272,17 @@ header{position:sticky;top:0;z-index:40;background:rgba(243,244,250,.82);-webkit
 .rp-sec:first-of-type{padding-top:4px}
 .rp-sec:last-of-type{border-bottom:none}
 .rp-sec-label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px}
+/* Collapsible configurator sections — native <details>, no extra JS needed. Summary row reads as
+   a clear tap target with a rotating chevron; only the section you're actively adjusting expands,
+   so the panel stays scannable instead of showing every control at once. */
+details.rp-sec{padding:0}
+details.rp-sec summary{list-style:none;cursor:pointer;padding:14px 2px;display:flex;align-items:center;justify-content:space-between;-webkit-tap-highlight-color:transparent}
+details.rp-sec summary::-webkit-details-marker{display:none}
+details.rp-sec summary .rp-sec-label{margin-bottom:0}
+details.rp-sec summary .rp-chevron{width:18px;height:18px;flex:none;color:var(--faint);transition:transform .18s ease}
+details.rp-sec[open] summary .rp-chevron{transform:rotate(180deg);color:var(--muted)}
+details.rp-sec .rp-sec-body{padding:2px 2px 16px}
+details.rp-sec summary .rp-sec-count{font-size:10.5px;font-weight:600;color:var(--faint);background:var(--panel2);border-radius:20px;padding:2px 8px;margin-left:8px}
 
 /* Mixing-desk row: all five spatial controls side by side, like channel strips. Reads faster
    than scattered sliders and collapses a lot of vertical space on a phone. */
@@ -656,9 +697,9 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     </div>
     <label class="hint" style="display:block;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.4px;font-size:11px">Room dimensions</label>
     <div class="row">
-      <div class="field"><label>Width (ft)</label><input id="clientRoomWidth" type="number" step="0.5" value="14" onchange="if(typeof drawRoomPlan==='function') drawRoomPlan()"></div>
-      <div class="field"><label>Length (ft)</label><input id="clientRoomLength" type="number" step="0.5" value="20" onchange="if(typeof drawRoomPlan==='function') drawRoomPlan()"></div>
-      <div class="field"><label>Ceiling ht (ft)</label><input id="clientRoomHeight" type="number" step="0.5" value="10" onchange="if(typeof drawRoomPlan==='function') drawRoomPlan()"></div>
+      <div class="field"><label>Depth (ft)</label><input id="clientRoomLength" type="number" step="0.5" value="20" onchange="if(typeof redrawActiveRoomPlanView==='function') redrawActiveRoomPlanView()"></div>
+      <div class="field"><label>Width (ft)</label><input id="clientRoomWidth" type="number" step="0.5" value="14" onchange="if(typeof redrawActiveRoomPlanView==='function') redrawActiveRoomPlanView()"></div>
+      <div class="field"><label>Ceiling ht (ft)</label><input id="clientRoomHeight" type="number" step="0.5" value="10" onchange="if(typeof redrawActiveRoomPlanView==='function') redrawActiveRoomPlanView()"></div>
     </div>
   </div>
 
@@ -675,9 +716,9 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <div class="field" style="flex:1;min-width:160px"><label>Channel configuration</label>
         <select id="channelConfig" onchange="if(quote) generate()">
           <option value="5.1">5.1 — no Atmos</option>
-          <option value="5.1.2">5.1.2 — Atmos, 2 height</option>
+          <option value="5.1.2" selected>5.1.2 — Atmos, 2 height</option>
           <option value="7.1">7.1 — no Atmos</option>
-          <option value="7.1.2" selected>7.1.2 — Atmos, 2 height</option>
+          <option value="7.1.2">7.1.2 — Atmos, 2 height</option>
           <option value="7.1.4">7.1.4 — Atmos, 4 height</option>
           <option value="9.1.2">9.1.2 — Atmos, 2 height</option>
           <option value="9.1.4">9.1.4 — Atmos, 4 height</option>
@@ -704,7 +745,10 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
   </div>
 
   <div class="card">
-    <h2>Preferences</h2>
+    <h2 style="display:flex;align-items:center;justify-content:space-between;padding-right:0">
+      <span>Preferences</span>
+      <button class="btn sm ghost" onclick="confirmResetAllPreferences()">Reset preferences</button>
+    </h2>
     <p class="hint" style="margin-bottom:4px">This is the base filter for quote generation — one row per price-list category, dropdown for each of its real sub-types. Set it once per client; every tap of Generate Quote on the Quote tab will only pick from what matches.</p>
     <div id="categoryAttrsList"></div>
   </div>
@@ -736,12 +780,17 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
 <!-- ================= ROOM PLAN (2D) TAB ================= -->
 <div class="tab" id="tab-roomplan">
   <div class="card rp-plan-card">
-    <div class="row" style="margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn sm on" id="rpViewTopBtn" onclick="setRoomPlanView('top')">Top-down</button>
-      <button class="btn sm" id="rpViewFrontBtn" onclick="setRoomPlanView('front')">Front wall</button>
-      <button class="btn sm" id="rpViewLeftBtn" onclick="setRoomPlanView('left')">Left wall</button>
-      <button class="btn sm" id="rpViewRightBtn" onclick="setRoomPlanView('right')">Right wall</button>
-      <button class="btn sm" id="rpViewRearBtn" onclick="setRoomPlanView('rear')">Rear wall</button>
+    <div class="row" style="margin-bottom:10px;flex-wrap:nowrap;align-items:center">
+      <div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-width:0">
+        <button class="rp-view-pill on" id="rpViewTopBtn" onclick="setRoomPlanView('top')">Top-down</button>
+        <button class="rp-view-pill" id="rpViewFrontBtn" onclick="setRoomPlanView('front')">Front wall</button>
+        <button class="rp-view-pill" id="rpViewLeftBtn" onclick="setRoomPlanView('left')">Left wall</button>
+        <button class="rp-view-pill" id="rpViewRightBtn" onclick="setRoomPlanView('right')">Right wall</button>
+        <button class="rp-view-pill" id="rpViewRearBtn" onclick="setRoomPlanView('rear')">Rear wall</button>
+      </div>
+      <button class="btn sm" id="rpCollapseBtn" onclick="toggleRoomPlanCollapse()" title="Collapse drawing to give the configurator more room" aria-label="Collapse or expand the drawing">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+      </button>
     </div>
     <div id="roomPlanWrap" style="overflow:auto;-webkit-overflow-scrolling:touch;position:relative">
       <svg id="roomPlanSvg" xmlns="http://www.w3.org/2000/svg" style="transition:transform .15s ease"></svg>
@@ -750,6 +799,8 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <svg id="rightElevationSvg" xmlns="http://www.w3.org/2000/svg" style="display:none"></svg>
       <svg id="rearElevationSvg" xmlns="http://www.w3.org/2000/svg" style="display:none"></svg>
       <div class="rp-zoom">
+        <button onclick="downloadRoomPlanSVG()" title="Download drawing (SVG)" aria-label="Download drawing"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>
+        <button onclick="printRoomPlan()" title="Print plan" aria-label="Print plan"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg></button>
         <button onclick="refreshRoomPlanView()" title="Refresh drawing" aria-label="Refresh drawing"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
         <button onclick="toggleRoomPlanFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen" id="rpFsBtn">
           <svg id="rpFsIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
@@ -758,27 +809,27 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         <button onclick="rpZoom(-1)" title="Zoom out" aria-label="Zoom out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
       </div>
     </div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn primary" onclick="downloadRoomPlanSVG()">⬇ Download drawing (SVG)</button>
-      <button class="btn" onclick="printRoomPlan()">🖨 Print plan</button>
-    </div>
   </div>
 
   <div class="rp-scroll-area">
-  <div class="card">
-    <h2>Configurator</h2>
-    <p class="hint" style="margin-bottom:14px">Fine-tune positioning and angles here — product selection and its category types/sub-types are set once on the Room tab. This drawing and schedule below are built to be handed straight to a client or architect.</p>
+  <div class="card" id="rpConfiguratorCard">
+    <h2 style="display:flex;align-items:center;justify-content:space-between;padding-right:0">
+      <span>Configurator</span>
+      <button class="btn sm" id="rpHideDescBtn" onclick="toggleRoomPlanDescriptions()" style="font-weight:500">Hide descriptions</button>
+    </h2>
+    <p class="hint rp-desc-text" style="margin-bottom:14px">Fine-tune positioning and angles here — product selection and its category types/sub-types are set once on the Room tab. This drawing and schedule below are built to be handed straight to a client or architect.</p>
 
-    <div class="rp-sec">
-      <span class="rp-sec-label">Screen</span>
+    <details class="rp-sec" open>
+      <summary><span class="rp-sec-label">Screen</span><svg class="rp-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></summary>
+      <div class="rp-sec-body">
       <div class="row">
         <div class="field"><label>Viewing standard</label>
-          <select id="rpStandard" onchange="drawRoomPlan()">
+          <select id="rpStandard" onchange="redrawActiveRoomPlanView()">
             <option value="thx" selected>THX (36° min)</option>
             <option value="smpte">SMPTE EG-18 (30° min)</option>
           </select>
         </div>
-        <div class="field"><label>Diagonal (in) <span class="hint" style="text-transform:none">— auto from quote</span></label><input id="rpScreen" type="number" step="1" value="120" oninput="drawRoomPlanThrottled()"></div>
+        <div class="field"><label>Diagonal (in) <span class="hint" style="text-transform:none">— auto from quote</span></label><input id="rpScreen" type="number" step="1" value="120" oninput="redrawActiveRoomPlanView()"></div>
       </div>
       <p class="hint" id="rpThrowDistance" style="margin-top:6px"></p>
       <div id="rpThrowSliderWrap" style="display:none;margin-top:8px">
@@ -787,41 +838,43 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </div>
         <input id="rpThrowSlider" type="range" step="0.1" oninput="onThrowSliderInput()" style="width:100%">
       </div>
-    </div>
+      </div>
+    </details>
 
-    <div class="rp-sec">
-      <span class="rp-sec-label">Positioning <span class="hint" style="text-transform:none;letter-spacing:0">— MLP is measured from the screen</span></span>
+    <details class="rp-sec">
+      <summary><span class="rp-sec-label">Angles &amp; Layout <span class="hint" style="text-transform:none;letter-spacing:0">— horizontal aiming and spacing</span></span><svg class="rp-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></summary>
+      <div class="rp-sec-body">
       <!-- All five spatial controls together as one mixing-desk row: they're the same kind of
            control, so splitting them across the panel made them harder to compare and read. -->
       <div class="rp-mixer">
         <div class="rp-mix-ch primary">
           <span class="rp-mix-name">MLP</span>
-          <input id="rpSeat" type="range" min="4" max="20" step="0.5" value="12" oninput="drawRoomPlanThrottled()" class="rp-vslider rp-mix-slider" aria-label="Main listening position distance from screen">
+          <input id="rpSeat" type="range" min="4" max="20" step="0.5" value="12" oninput="redrawActiveRoomPlanView()" class="rp-vslider rp-mix-slider" aria-label="Main listening position distance from screen">
           <span class="rp-mix-val mono" id="rpSeatVal"></span>
         </div>
         <div class="rp-mix-ch">
           <span class="rp-mix-name">Front</span>
-          <input id="rpAngleFront" type="range" min="20" max="35" step="1" value="28" oninput="syncAngleLabels();drawRoomPlanThrottled()" class="rp-vslider-sm rp-mix-slider" aria-label="Front speaker angle">
+          <input id="rpAngleFront" type="range" min="20" max="35" step="1" value="28" oninput="syncAngleLabels();redrawActiveRoomPlanView()" class="rp-vslider-sm rp-mix-slider" aria-label="Front speaker angle">
           <span class="rp-mix-val mono" id="rpAngleFrontVal"></span>
         </div>
         <div class="rp-mix-ch" id="rpAngleFrontWideRow" style="display:none">
           <span class="rp-mix-name">F.Wide</span>
-          <input id="rpAngleFrontWide" type="range" min="45" max="75" step="1" value="60" oninput="syncAngleLabels();drawRoomPlanThrottled()" class="rp-vslider-sm rp-mix-slider" aria-label="Front wide speaker angle">
+          <input id="rpAngleFrontWide" type="range" min="45" max="75" step="1" value="60" oninput="syncAngleLabels();redrawActiveRoomPlanView()" class="rp-vslider-sm rp-mix-slider" aria-label="Front wide speaker angle">
           <span class="rp-mix-val mono" id="rpAngleFrontWideVal"></span>
         </div>
         <div class="rp-mix-ch">
           <span class="rp-mix-name">Surr.</span>
-          <input id="rpAngleSurround" type="range" min="90" max="130" step="1" value="100" oninput="syncAngleLabels();drawRoomPlanThrottled()" class="rp-vslider-sm rp-mix-slider" aria-label="Surround speaker angle">
+          <input id="rpAngleSurround" type="range" min="90" max="130" step="1" value="100" oninput="syncAngleLabels();redrawActiveRoomPlanView()" class="rp-vslider-sm rp-mix-slider" aria-label="Surround speaker angle">
           <span class="rp-mix-val mono" id="rpAngleSurroundVal"></span>
         </div>
         <div class="rp-mix-ch">
           <span class="rp-mix-name">Rear</span>
-          <input id="rpAngleRear" type="range" min="130" max="150" step="1" value="140" oninput="syncAngleLabels();drawRoomPlanThrottled()" class="rp-vslider-sm rp-mix-slider" aria-label="Rear surround speaker angle">
+          <input id="rpAngleRear" type="range" min="130" max="150" step="1" value="140" oninput="syncAngleLabels();redrawActiveRoomPlanView()" class="rp-vslider-sm rp-mix-slider" aria-label="Rear surround speaker angle">
           <span class="rp-mix-val mono" id="rpAngleRearVal"></span>
         </div>
         <div class="rp-mix-ch">
           <span class="rp-mix-name">Atmos</span>
-          <input id="rpAngleAtmos" type="range" min="30" max="55" step="1" value="45" oninput="syncAngleLabels();drawRoomPlanThrottled()" class="rp-vslider-sm rp-mix-slider" aria-label="Atmos elevation angle">
+          <input id="rpAngleAtmos" type="range" min="30" max="55" step="1" value="45" oninput="syncAngleLabels();redrawActiveRoomPlanView()" class="rp-vslider-sm rp-mix-slider" aria-label="Atmos elevation angle">
           <span class="rp-mix-val mono" id="rpAngleAtmosVal"></span>
         </div>
       </div>
@@ -831,64 +884,72 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           <span>Narrower</span><span>Atmos separation <b id="rpAtmosSepVal"></b></span><span>Wider</span>
         </div>
         <input id="rpAtmosSep" type="range" min="2" max="8" step="0.25" value="" oninput="onAtmosSepInput()" style="width:100%" aria-label="Atmos speaker left-right separation">
-        <p class="hint" style="margin-top:3px">Distance each Atmos speaker sits from the room's centreline — the fixed default was capping this too tight regardless of room width.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Distance each Atmos speaker sits from the room's centreline — the fixed default was capping this too tight regardless of room width.</p>
       </div>
+      </div>
+    </details>
+
+    <details class="rp-sec">
+      <summary><span class="rp-sec-label">Speaker Heights &amp; Sub Placement <span class="hint" style="text-transform:none;letter-spacing:0">— vertical positioning</span></span><svg class="rp-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></summary>
+      <div class="rp-sec-body">
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>0.5ft</span><span>Screen bottom height off floor <b id="rpScreenHeightVal"></b></span><span>4ft</span>
         </div>
         <input id="rpScreenHeight" type="range" min="0.5" max="4" step="0.25" value="2" oninput="onScreenHeightInput()" style="width:100%" aria-label="Screen bottom edge height off the floor">
-        <p class="hint" style="margin-top:3px">Standard seated-viewing height is around 2ft — adjust for a raised platform, acoustically transparent screen, or a specific mounting plan.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Standard seated-viewing height is around 2ft — adjust for a raised platform, acoustically transparent screen, or a specific mounting plan.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>Ear level</span><span>Front speaker elevation <b id="rpFrontElevVal"></b></span><span>15°</span>
         </div>
         <input id="rpFrontElev" type="range" min="0" max="15" step="1" value="0" oninput="onFrontElevInput()" style="width:100%" aria-label="Front speaker vertical elevation above ear level">
-        <p class="hint" style="margin-top:3px">How far above ear level (measured at the MLP) the front L/R sit — 0° is straight-ahead, common for on-wall or above-screen mounting up to 15°.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">How far above ear level (measured at the MLP) the front L/R sit — 0° is straight-ahead, common for on-wall or above-screen mounting up to 15°.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>Ear level</span><span>Centre speaker elevation <b id="rpCenterElevVal"></b></span><span>15°</span>
         </div>
         <input id="rpCenterElev" type="range" min="0" max="15" step="1" value="0" oninput="onCenterElevInput()" style="width:100%" aria-label="Centre speaker vertical elevation above ear level">
-        <p class="hint" style="margin-top:3px">Independent of the fronts — a centre channel is often mounted above or below screen height rather than exactly level with L/R.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Independent of the fronts — a centre channel is often mounted above or below screen height rather than exactly level with L/R.</p>
       </div>
       <div style="margin-top:10px" id="rpFrontWideElevRow">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>Ear level</span><span>Front wide speaker elevation <b id="rpFrontWideElevVal"></b></span><span>15°</span>
         </div>
         <input id="rpFrontWideElev" type="range" min="0" max="15" step="1" value="0" oninput="onFrontWideElevInput()" style="width:100%" aria-label="Front wide speaker vertical elevation above ear level">
-        <p class="hint" style="margin-top:3px">Only applies to 9-channel systems (9.1.2/9.1.4) — Dolby's front wide pair, positioned wider than L/R, independent of the other elevation controls.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Only applies to 9-channel systems (9.1.2/9.1.4) — Dolby's front wide pair, positioned wider than L/R, independent of the other elevation controls.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>−2ft</span><span>Surround height adjustment <b id="rpSurroundElevVal"></b></span><span>+2ft</span>
         </div>
         <input id="rpSurroundElev" type="range" min="-2" max="2" step="0.25" value="0" oninput="onSurroundElevInput()" style="width:100%" aria-label="Surround speaker height adjustment from the standard mounting height">
-        <p class="hint" style="margin-top:3px">Adjusts up or down from the standard surround mounting height — surrounds are conventionally above ear level by default, unlike front/centre.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Adjusts up or down from the standard surround mounting height — surrounds are conventionally above ear level by default, unlike front/centre.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>−2ft</span><span>Rear surround height adjustment <b id="rpRearSurroundElevVal"></b></span><span>+2ft</span>
         </div>
         <input id="rpRearSurroundElev" type="range" min="-2" max="2" step="0.25" value="0" oninput="onRearSurroundElevInput()" style="width:100%" aria-label="Rear surround speaker height adjustment from the standard mounting height">
-        <p class="hint" style="margin-top:3px">Independent of the side surrounds — only applies to a genuine rear pair (7.1+ systems with a dedicated rear surround position, on the rear wall view).</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Independent of the side surrounds — only applies to a genuine rear pair (7.1+ systems with a dedicated rear surround position, on the rear wall view).</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
           <span>At wall</span><span>Subwoofer distance from wall <b id="rpSubDistVal"></b></span><span>3ft</span>
         </div>
         <input id="rpSubDist" type="range" min="0" max="3" step="0.25" value="0.5" oninput="onSubDistInput()" style="width:100%" aria-label="Subwoofer distance from nearest wall">
-        <p class="hint" style="margin-top:3px">Corner/wall placement reinforces bass but can sound boomy — pulling the sub out often smooths the response. Fine-tune on site either way.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">Corner/wall placement reinforces bass but can sound boomy — pulling the sub out often smooths the response. Fine-tune on site either way.</p>
       </div>
-    </div>
+      </div>
+    </details>
 
-    <div class="rp-sec">
-      <span class="rp-sec-label">System</span>
+    <details class="rp-sec">
+      <summary><span class="rp-sec-label">System</span><svg class="rp-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></summary>
+      <div class="rp-sec-body">
       <div class="row">
         <div class="field"><label>Channel config <span id="rpChannelSrc" class="hint"></span></label>
-          <select id="rpChannel" onchange="drawRoomPlan()">
+          <select id="rpChannel" onchange="redrawActiveRoomPlanView()">
             <option value="5.1" selected>5.1</option>
             <option value="5.1.2">5.1.2</option>
             <option value="7.1">7.1</option>
@@ -899,7 +960,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           </select>
         </div>
         <div class="field"><label>Rack / AVR location</label>
-          <select id="rpRack" onchange="drawRoomPlan()">
+          <select id="rpRack" onchange="redrawActiveRoomPlanView()">
             <option value="front-center" selected>Front-center (under screen)</option>
             <option value="front-right">Front-right corner</option>
             <option value="front-left">Front-left corner</option>
@@ -908,20 +969,21 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           </select>
         </div>
         <div class="field"><label>Surround wiring</label>
-          <select id="rpSurroundRoute" onchange="drawRoomPlan()">
+          <select id="rpSurroundRoute" onchange="redrawActiveRoomPlanView()">
             <option value="ceiling" selected>Via ceiling conduit</option>
             <option value="direct">Direct wall run</option>
           </select>
         </div>
         <div class="field"><label>Show</label>
-          <select id="rpShow" onchange="drawRoomPlan()">
+          <select id="rpShow" onchange="redrawActiveRoomPlanView()">
             <option value="all" selected>Everything</option>
             <option value="speakers">Speakers + angles</option>
             <option value="cables">Cable runs only</option>
           </select>
         </div>
       </div>
-    </div>
+      </div>
+    </details>
 
     <!-- The four scattered full-width buttons are now one action grid at the end of the panel,
          so the controls above read as settings and these read as actions. -->
@@ -937,11 +999,16 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
   <div class="card">
     <h2 style="display:flex;align-items:center;justify-content:space-between;padding-right:0">
       <span>Placement schedule <span id="roomPlanCount" class="hint"></span></span>
-      <span class="channel-pill" id="roomPlanChannelPill"></span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="channel-pill" id="roomPlanChannelPill"></span>
+        <button class="btn sm" id="rpScheduleToggleBtn" onclick="toggleRoomPlanScheduleVisibility()">Hide</button>
+      </span>
     </h2>
+    <div id="roomPlanScheduleBody">
     <div id="roomPlanTable"></div>
     <div id="roomPlanEquipment" style="margin-top:14px"></div>
     <p class="hint" style="margin-top:10px">Cable lengths include a +15% slack allowance for routing and terminations. Positions follow Dolby Atmos Home Theater Installation Guidelines and THX reference angles; treat as a design starting point and verify on site.</p>
+    </div>
   </div>
 
   <div class="card">
@@ -2015,6 +2082,9 @@ function showTab(t){
   if(navBtn) navBtn.classList.add('on');
   document.getElementById('stickyBar').classList.toggle('show', t==='quote' && !!quote);
   if(t==='roomplan' && typeof drawRoomPlan==='function') drawRoomPlan();
+  if(t==='roomplan' && typeof loadRoomPlanCollapseState==='function') loadRoomPlanCollapseState();
+  if(t==='roomplan' && typeof loadRoomPlanDescriptionsState==='function') loadRoomPlanDescriptionsState();
+  if(t==='roomplan' && typeof loadRoomPlanScheduleVisibilityState==='function') loadRoomPlanScheduleVisibilityState();
   if(t==='quote' && typeof syncQuotingForSummary==='function') syncQuotingForSummary();
   if(t==='room' && typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
   if(t==='room' && typeof syncFurnitureCheckbox==='function') syncFurnitureCheckbox();
@@ -2129,6 +2199,29 @@ function applySpeakerBrand(){
   cats.forEach(c=>{ if(SPEAKER_CATS.includes(c.id)) c.brandPref = brand || null; });
   persistCats();
   toast(brand ? `All speaker categories locked to ${brand}` : 'Speaker brand preference cleared for all speaker categories');
+}
+function confirmResetAllPreferences(){
+  customConfirm('Reset all preferences to default settings?', resetAllPreferences, 'Reset');
+}
+// Resets every filter/preference system — category attribute filters (mount types, cable specs,
+// screen/projector filters), brand locks, and variant weighting — back to their application
+// defaults. Does NOT touch client details, room dimensions, or budget: those are project data,
+// not preferences, and stay exactly as entered.
+function resetAllPreferences(){
+  moreFilterPrefs = { subType:'', hdmiSpec:'', hdmiLength:'', cableGauge:'', avrType:'', poweramplChannels:'', cableLength:'', avcableLength:'', netcableLength:'', frontsMount:'', centerMount:'', surroundsMount:'', atmosMount:'', subDriverSize:'' };
+  projScreenPrefs = { projRes:'', projLight:'', screenType:'', screenAT:'', screenMinSize:'', screenSizeMode:'min', exactProjector:'', exactScreen:'' };
+  variantPrefs = {};
+  cats.forEach(c=> c.brandPref = null);
+  saveMoreFilterPrefs();
+  saveProjScreenPrefs();
+  saveVariantPrefs();
+  persistCats();
+  renderCategoryAttributesUI();
+  syncPrefButtonsUI();
+  populateExactModelDropdowns();
+  if(quote) generate();       // recalculates speaker/equipment selections against the reset filters
+  drawRoomPlan();              // refreshes the layout and re-validates placement against the reset state
+  toast('All preferences reset to default');
 }
 function clearAllBrandPrefs(){
   cats.forEach(c=> c.brandPref = null);
@@ -2331,7 +2424,7 @@ function brandsInCat(catId){
 // frame type/acoustic-transparency for screens), plus an "exact model" override for either —
 // so you can pin the projector/screen without digging into Category weights. Persists like
 // other standing preferences (install %, sub count).
-let projScreenPrefs = { projRes:'', projLight:'', screenType:'', screenAT:'', screenMinSize:'', exactProjector:'', exactScreen:'' };
+let projScreenPrefs = { projRes:'', projLight:'', screenType:'', screenAT:'', screenMinSize:'', screenSizeMode:'min', exactProjector:'', exactScreen:'' };
 // Same pattern as projScreenPrefs, for the sub-category attributes added afterward (TV size,
 // subwoofer type, HDMI spec, speaker cable gauge) — so ALL of Room's rich price-list attributes
 // actually filter what Generate Quote can pick, not just projector/screen.
@@ -2416,7 +2509,8 @@ function renderCategoryAttributesUI(){
     row('Projection Screen',
       chips('caScreenType',"setPref('screenType',this)",[['','Any'],['fixed','Fixed'],['motorized','Motorised']],projScreenPrefs.screenType,'Frame') +
       chips('caScreenAT',"setPref('screenAT',this)",[['','Any'],['at','AT only'],['alr','ALR'],['std','Standard']],projScreenPrefs.screenAT,'Material') +
-      chips('caScreenSize',"setScreenSizePref(this.dataset.val)",[['','Any'],[84,'84"+'],[100,'100"+'],[120,'120"+'],[135,'135"+'],[150,'150"+']],projScreenPrefs.screenMinSize,'Min size') +
+      chips('caScreenSizeMode',"setScreenSizeMode(this.dataset.val)",[['min','At least'],['exact','Exactly']],projScreenPrefs.screenSizeMode,'Size means') +
+      chips('caScreenSize',"setScreenSizePref(this.dataset.val)",[['','Any'],[84,projScreenPrefs.screenSizeMode==='exact'?'84"':'84"+'],[100,projScreenPrefs.screenSizeMode==='exact'?'100"':'100"+'],[120,projScreenPrefs.screenSizeMode==='exact'?'120"':'120"+'],[135,projScreenPrefs.screenSizeMode==='exact'?'135"':'135"+'],[150,projScreenPrefs.screenSizeMode==='exact'?'150"':'150"+']],projScreenPrefs.screenMinSize,'Size') +
       `<div class="ca-field"><label>Or exact model</label><select id="prefScreenModel" onchange="setExactPref('screen',this.value)"><option value="">Any (use filters above)</option></select></div>`),
     row('Home Theater in a Box', chips('caHtib',"setVariantPref('htib',this.dataset.val)",dynamicOptions('htib'),variantPrefs.htib,'Type')),
     row('AVR / Processor selection', chips('caAvrType',"setMoreFilterPref('avrType',this.dataset.val)",[['','Receiver (default)'],['processor','Processor']],moreFilterPrefs.avrType,'Use')),
@@ -2543,6 +2637,12 @@ function setScreenSizePref(v){
   saveProjScreenPrefs();
   if(quote) generate();
 }
+function setScreenSizeMode(mode){
+  projScreenPrefs.screenSizeMode = mode;
+  saveProjScreenPrefs();
+  renderCategoryAttributesUI(); // rebuild so the size chip labels reflect the new mode (120" vs 120"+)
+  if(quote) generate();
+}
 function populateExactModelDropdowns(){
   const projSel = document.getElementById('prefProjModel');
   const screenSel = document.getElementById('prefScreenModel');
@@ -2594,7 +2694,11 @@ function catItemsForScreen(){
   if(projScreenPrefs.screenAT==='at') opts = opts.filter(o=>o.acousticTransparent);
   if(projScreenPrefs.screenAT==='alr') opts = opts.filter(o=>o.ambientLightRejecting);
   if(projScreenPrefs.screenAT==='std') opts = opts.filter(o=>!o.acousticTransparent && !o.ambientLightRejecting);
-  if(projScreenPrefs.screenMinSize) opts = opts.filter(o=>(o.screenSize||0) >= projScreenPrefs.screenMinSize);
+  if(projScreenPrefs.screenMinSize){
+    opts = projScreenPrefs.screenSizeMode==='exact'
+      ? opts.filter(o=>(o.screenSize||0) === projScreenPrefs.screenMinSize)
+      : opts.filter(o=>(o.screenSize||0) >= projScreenPrefs.screenMinSize);
+  }
   return opts.length ? opts : all;
 }
 // After an allocation, reports if the projector/screen preferences couldn't actually be honoured
@@ -2610,7 +2714,8 @@ function checkProjScreenFallback(sel){
   }
   if(projScreenPrefs.exactScreen && sel.screen!==projScreenPrefs.exactScreen) notes.push('preferred screen unavailable at this budget');
   else if(!projScreenPrefs.exactScreen && scr && (projScreenPrefs.screenType||projScreenPrefs.screenAT||projScreenPrefs.screenMinSize)){
-    const mismatch = (projScreenPrefs.screenType && (scr.screenType||'fixed')!==projScreenPrefs.screenType) || (projScreenPrefs.screenAT==='at' && !scr.acousticTransparent) || (projScreenPrefs.screenAT==='alr' && !scr.ambientLightRejecting) || (projScreenPrefs.screenAT==='std' && (scr.acousticTransparent||scr.ambientLightRejecting)) || (projScreenPrefs.screenMinSize && (scr.screenSize||0) < projScreenPrefs.screenMinSize);
+    const sizeMismatch = projScreenPrefs.screenMinSize && (projScreenPrefs.screenSizeMode==='exact' ? (scr.screenSize||0) !== projScreenPrefs.screenMinSize : (scr.screenSize||0) < projScreenPrefs.screenMinSize);
+    const mismatch = (projScreenPrefs.screenType && (scr.screenType||'fixed')!==projScreenPrefs.screenType) || (projScreenPrefs.screenAT==='at' && !scr.acousticTransparent) || (projScreenPrefs.screenAT==='alr' && !scr.ambientLightRejecting) || (projScreenPrefs.screenAT==='std' && (scr.acousticTransparent||scr.ambientLightRejecting)) || sizeMismatch;
     if(mismatch) notes.push('no screen matched your size/frame/material filter — used closest available');
   }
   return notes;
@@ -2757,7 +2862,7 @@ function startNewQuote(){
     document.getElementById('budget').value = '';
     document.getElementById('installPct').value = '';
     document.getElementById('systemType').value = 'component';
-    document.getElementById('channelConfig').value = '7.1.2';
+    document.getElementById('channelConfig').value = '5.1.2';
     syncSubCountUI(1);
     syncChannelDisable();
     document.getElementById('variantsCard').style.display = 'none';
@@ -3607,6 +3712,77 @@ function exportQuoteJSON(){
 // so "Rs" is used here even though the on-screen app and printSheet correctly show ₹ via HTML/CSS.
 function fmtPdf(n){ return 'Rs ' + Math.round(n).toLocaleString('en-IN'); }
 
+// ============================================================================
+// PDF DESIGN SYSTEM — shared constants and layout helpers so every page in the
+// drawing package (quotation, room plan, elevations, schedule) reads as one
+// consistent, professionally laid out document instead of four separate exports.
+// Deliberately restrained color palette (per spec: no bright colors, print-friendly):
+// near-black for primary text, two grays for secondary content, one subdued blue accent.
+// ============================================================================
+const PDFX = {
+  margin: 20,
+  colors: {
+    ink:      [26, 29, 33],
+    charcoal: [64, 70, 77],
+    slate:    [117, 124, 132],
+    hairline: [206, 210, 214],
+    panelTint:[248, 249, 250],
+    accent:   [42, 78, 130],
+  },
+};
+function pdfPageMeta(pageNum, sheetCode){
+  const s = getSettings();
+  const clientName = (quote && quote.client && quote.client.name) || 'Untitled project';
+  const roomName = (quote && quote.client && quote.client.room) || 'Home Theater';
+  const dateStr = (quote && quote.date) || new Date().toISOString().slice(0,10);
+  return {
+    project: clientName, room: roomName, date: dateStr,
+    drawingNo: (sheetCode||'AV') + '-' + String(pageNum).padStart(3,'0'),
+    revision: 'A',
+    company: s.name || 'BudgetFit', addr: s.addr || '', email: s.email || '', phone: s.phone || '',
+  };
+}
+// Draws the shared header band and returns the Y position page content should start at.
+function pdfHeader(doc, meta, pageNum, pageCount, titleMain, titleSub){
+  const pageW = doc.internal.pageSize.getWidth();
+  const m = PDFX.margin, c = PDFX.colors;
+  let y = m;
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...c.slate);
+  doc.text(meta.project, m, y, {maxWidth: 95});
+  doc.text(`${meta.room}  ·  ${meta.date}`, pageW-m, y, {align:'right', maxWidth: 95});
+  y += 5;
+  doc.setFontSize(7);
+  doc.text(`Drawing ${meta.drawingNo}  ·  Rev ${meta.revision}`, m, y);
+  doc.text(`Page ${pageNum} of ${pageCount}`, pageW-m, y, {align:'right'});
+  y += 6;
+  doc.setDrawColor(...c.hairline); doc.setLineWidth(0.3);
+  doc.line(m, y, pageW-m, y);
+  y += 12;
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...c.ink);
+  doc.text(titleMain, pageW/2, y, {align:'center'});
+  y += 6;
+  if(titleSub){
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...c.slate);
+    doc.text(titleSub, pageW/2, y, {align:'center'});
+    y += 5;
+  }
+  return y + 6;
+}
+// Draws the shared footer band — company identity, contact, confidentiality notice.
+function pdfFooter(doc, meta){
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const m = PDFX.margin, c = PDFX.colors;
+  let y = pageH - m - 8;
+  doc.setDrawColor(...c.hairline); doc.setLineWidth(0.3);
+  doc.line(m, y, pageW-m, y);
+  y += 5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...c.slate);
+  doc.text(meta.company, m, y, {maxWidth: 70});
+  const contactBits = [meta.phone, meta.email].filter(Boolean).join('  ·  ');
+  if(contactBits) doc.text(contactBits, pageW/2, y, {align:'center', maxWidth: 80});
+  doc.text('Confidential — for client use only', pageW-m, y, {align:'right'});
+}
 function buildQuotationPDFDoc(q){
   const s = getSettings();
   const T = computeQuoteTotals(q);
@@ -3722,36 +3898,29 @@ function buildQuotationPDFDoc(q){
 // Draws the room plan onto a fresh jsPDF page (call doc.addPage() first). Reuses computeRoomPlan()
 // directly — the same function that drives the on-screen SVG — so positions, angles and distances
 // in the PDF can never drift out of sync with what's shown in the Room Plan tab.
-function buildRoomPlanDrawingPage(doc, plan){
+function buildRoomPlanDrawingPage(doc, plan, pageNum, pageCount){
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const ink=[32,38,43], muted=[118,127,114], accent=[79,70,229], accent2=[255,107,53], accent3=[8,145,178], green=[16,185,129];
-  let y = margin;
+  const margin = PDFX.margin;
+  const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent=PDFX.colors.accent, accent2=PDFX.colors.charcoal, accent3=PDFX.colors.accent, green=PDFX.colors.accent;
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink);
-  doc.text('ROOM PLAN — 2D LAYOUT', margin, y+3, {maxWidth: pageW-margin*2});
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
-  const clientName = (quote && quote.client && quote.client.name) || 'Untitled project';
-  doc.text(`${clientName} · ${plan.htibMode?'HTiB':'Component'} · ${plan.cfgId}`, margin, y+9, {maxWidth: pageW-margin*2});
-  y += 16;
-  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
-  doc.line(margin, y, pageW-margin, y);
-  y += 8;
+  const meta = pdfPageMeta(pageNum||2, 'RP');
+  const clientName = meta.project;
+  let y = pdfHeader(doc, meta, pageNum||2, pageCount||7, 'ROOM PLAN', `${clientName}  ·  ${plan.htibMode?'HTiB':'Component'}  ·  ${plan.cfgId}  ·  Scale approx.`);
 
   // drawing area: fit room to available width x a fixed drawing height, preserving aspect ratio
-  const drawTop = y + 6;   // leave room above for the width dimension
-  const drawH = 140;
-  const usableW = pageW - margin*2 - 14; // leave a little room on the left for the length dimension
+  const drawTop = y + 8;
+  const drawH = 172;
+  const usableW = pageW - margin*2 - 16;
   const mmPerFt = Math.min(usableW/plan.W, drawH/plan.L);
   const roomWmm = plan.W*mmPerFt, roomLmm = plan.L*mmPerFt;
-  const roomX0 = margin + 14 + (usableW-roomWmm)/2;
+  const roomX0 = margin + 16 + (usableW-roomWmm)/2;
   const X = xf => roomX0 + (xf + plan.W/2)*mmPerFt;
   const Y = yf => drawTop + yf*mmPerFt;
 
   // walls
   doc.setDrawColor(...ink); doc.setLineWidth(1.4);
-  doc.setFillColor(247,247,250);
+  doc.setFillColor(...PDFX.colors.panelTint);
   doc.rect(X(-plan.W/2), Y(0), roomWmm, roomLmm, 'FD');
 
   // dimension line: width (top)
@@ -3836,44 +4005,38 @@ function buildRoomPlanDrawingPage(doc, plan){
     const ly = cy < Y(plan.seat.y) ? cy-3.2 : cy+5;
     doc.text(`${m.num} ${m.id}`, cx, ly, {align:'center'});
   });
+  pdfFooter(doc, meta);
 }
 
 // Wall elevation PDF pages — same drafting conventions as the top-down plan (arrow-tipped
 // dimension lines, matching typography) adapted to a vertical wall face. Every text call that
 // could realistically run long (client name, titles) gets an explicit maxWidth so nothing can
 // ever overflow its box regardless of how long a name or model string turns out to be.
-function buildWallElevationPDFPage(doc, plan, wall){
+function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const ink=[32,38,43], muted=[118,127,114], accent=[79,70,229], accent2=[255,107,53], accent3=[8,145,178];
-  let y = margin;
+  const margin = PDFX.margin;
+  const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent=PDFX.colors.accent, accent2=PDFX.colors.charcoal, accent3=PDFX.colors.accent;
 
   const wallId = wall.charAt(0).toUpperCase()+wall.slice(1);
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink);
-  doc.text(`${wallId.toUpperCase()} WALL ELEVATION`, margin, y+3, {maxWidth: pageW-margin*2});
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
-  const clientName = (quote && quote.client && quote.client.name) || 'Untitled project';
-  doc.text(`${clientName} · ${plan.htibMode?'HTiB':'Component'} · ${plan.cfgId}`, margin, y+9, {maxWidth: pageW-margin*2});
-  y += 16;
-  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
-  doc.line(margin, y, pageW-margin, y);
-  y += 8;
+  const meta = pdfPageMeta(pageNum, 'EL');
+  const clientName = meta.project;
+  let y = pdfHeader(doc, meta, pageNum||1, pageCount||6, `${wallId.toUpperCase()} WALL ELEVATION`, `${clientName}  ·  ${plan.htibMode?'HTiB':'Component'}  ·  ${plan.cfgId}`);
 
   const isFrontRear = (wall==='front' || wall==='rear');
   const axisFt = isFrontRear ? plan.W : plan.L;
-  const drawTop = y + 6;
-  const drawH = 122;
-  const usableW = pageW - margin*2 - 14;
+  const drawTop = y + 8;
+  const drawH = 154;
+  const usableW = pageW - margin*2 - 16;
   const mmPerFt = Math.min(usableW/axisFt, drawH/plan.H);
   const wallWmm = axisFt*mmPerFt, wallHmm = plan.H*mmPerFt;
-  const wallX0 = margin + 14 + (usableW-wallWmm)/2;
+  const wallX0 = margin + 16 + (usableW-wallWmm)/2;
   const X = posFt => isFrontRear ? wallX0 + (posFt+plan.W/2)*mmPerFt : wallX0 + posFt*mmPerFt;
   const Yh = hFt => drawTop + (plan.H-hFt)*mmPerFt;
   const floorY = Yh(0), ceilY = Yh(plan.H);
 
   doc.setDrawColor(...ink); doc.setLineWidth(1.4);
-  doc.setFillColor(247,247,250);
+  doc.setFillColor(...PDFX.colors.panelTint);
   doc.rect(wallX0, drawTop, wallWmm, wallHmm, 'FD');
 
   // dimension: width/depth (bottom)
@@ -3908,10 +4071,20 @@ function buildWallElevationPDFPage(doc, plan, wall){
     const screenBottomH = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
     const screenWmm = plan.screenW*mmPerFt, screenHmm = plan.screenH*mmPerFt;
     const screenX = X(0)-screenWmm/2, screenTopY = Yh(screenBottomH+plan.screenH);
-    doc.setFillColor(20,20,20); doc.setDrawColor(...ink); doc.setLineWidth(0.4);
+    doc.setFillColor(255,255,255); doc.setDrawColor(...ink); doc.setLineWidth(0.5);
     doc.rect(screenX, screenTopY, screenWmm, screenHmm, 'FD');
     doc.setFontSize(6.5); doc.setTextColor(...muted);
     doc.text('SCREEN', X(0), screenTopY-2, {align:'center'});
+    // diagonal measurement — corner to corner, matching the screen's actual quoted diagonal size
+    const dx1=screenX, dy1=screenTopY+screenHmm, dx2=screenX+screenWmm, dy2=screenTopY;
+    doc.setDrawColor(...accent3); doc.setLineWidth(0.3);
+    doc.line(dx1, dy1, dx2, dy2);
+    doc.setFillColor(...accent3);
+    const diagAngle = Math.atan2(dy1-dy2, dx2-dx1);
+    doc.triangle(dx1,dy1, dx1+3*Math.cos(diagAngle-0.4),dy1-3*Math.sin(diagAngle-0.4), dx1+3*Math.cos(diagAngle+0.4),dy1-3*Math.sin(diagAngle+0.4), 'F');
+    doc.triangle(dx2,dy2, dx2-3*Math.cos(diagAngle-0.4),dy2+3*Math.sin(diagAngle-0.4), dx2-3*Math.cos(diagAngle+0.4),dy2+3*Math.sin(diagAngle+0.4), 'F');
+    doc.setFontSize(6.5); doc.setTextColor(...accent3);
+    doc.text(`${plan.screenIn}" diag`, (dx1+dx2)/2, (dy1+dy2)/2, {align:'center', angle:-diagAngle*180/Math.PI});
   }
 
   const frontAngleDeg = +(document.getElementById('rpFrontElev')?document.getElementById('rpFrontElev').value:0) || 0;
@@ -3931,11 +4104,17 @@ function buildWallElevationPDFPage(doc, plan, wall){
   else relevant = plan.markers.filter(m=> /^(SL|SR)[1-9]/.test(m.id) || m.id==='TRL' || m.id==='TRR');
 
   if(!relevant.length){
-    doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...muted);
-    doc.text('No speakers positioned on this wall for the current system', wallX0+wallWmm/2, (floorY+ceilY)/2, {align:'center', maxWidth: wallWmm-10});
+    const cx = wallX0+wallWmm/2, cy = (floorY+ceilY)/2 - 8;
+    doc.setDrawColor(...PDFX.colors.hairline); doc.setLineWidth(0.6);
+    doc.circle(cx, cy, 9, 'S');
+    doc.line(cx-6.4, cy-6.4, cx+6.4, cy+6.4);
+    doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+    doc.text('No equipment on this wall', cx, cy+18, {align:'center', maxWidth: wallWmm-10});
+    doc.setFontSize(7.5);
+    doc.text('for the current system configuration', cx, cy+24, {align:'center', maxWidth: wallWmm-10});
     doc.setFont('helvetica','normal');
   } else {
-    relevant.forEach(m=>{
+    relevant.forEach((m,mi)=>{
       let h = m.h;
       if(wall==='front' && (m.id==='FL' || m.id==='FR')) h = frontSpeakerH;
       else if(wall==='front' && m.id==='C') h = centerSpeakerH;
@@ -3963,113 +4142,138 @@ function buildWallElevationPDFPage(doc, plan, wall){
       doc.triangle(dimCx,cy, dimCx-0.6,cy+1.5, dimCx+0.6,cy+1.5, 'F');
       doc.setFontSize(5); doc.setTextColor(...muted);
       doc.text(fmtFt(h), dimCx-1.2, (floorY+cy)/2, {align:'center', angle:90});
+      // horizontal distance-along-wall dimension — how far this marker sits from the wall's
+      // starting edge, stacked one row per marker below the main width dimension
+      const rowY = dimYB + 5 + mi*4;
+      doc.setDrawColor(...accent3); doc.setLineWidth(0.15);
+      doc.line(wallX0, rowY, cx, rowY);
+      doc.setFillColor(...accent3);
+      doc.triangle(wallX0,rowY, wallX0+1,rowY-0.5, wallX0+1,rowY+0.5, 'F');
+      doc.triangle(cx,rowY, cx-1,rowY-0.5, cx-1,rowY+0.5, 'F');
+      doc.setFontSize(4.5); doc.setTextColor(...accent3);
+      doc.text(`${m.id} ${fmtFt(Math.abs(posFt-(isFrontRear?-plan.W/2:0)))}`, (wallX0+cx)/2, rowY-1, {align:'center'});
     });
   }
 
   if(wall==='front' && (frontAngleDeg>0 || centerAngleDeg>0)){
     const label = frontAngleDeg===centerAngleDeg ? `${frontAngleDeg}\u00b0 up from ear level`
       : `L/R ${frontAngleDeg}\u00b0 \u00b7 Centre ${centerAngleDeg}\u00b0 up from ear level`;
-    doc.setFontSize(7); doc.setTextColor(200,40,40);
+    doc.setFontSize(7); doc.setTextColor(...PDFX.colors.accent);
     doc.text(label, X(0), Yh(plan.earH)-3, {align:'center', maxWidth: wallWmm-10});
   }
   if((wall==='left'||wall==='right') && surroundOffsetFt!==0){
-    doc.setFontSize(7); doc.setTextColor(200,40,40);
+    doc.setFontSize(7); doc.setTextColor(...PDFX.colors.accent);
     doc.text(`${surroundOffsetFt>0?'+':''}${surroundOffsetFt.toFixed(2)}ft from standard surround height`, X(0), Yh(plan.H)-3, {align:'center', maxWidth: wallWmm-10});
   }
   if((wall==='left'||wall==='right') && frontWideAngleDeg>0 && plan.markers.some(m=>m.id==='FWL'||m.id==='FWR')){
-    doc.setFontSize(7); doc.setTextColor(200,40,40);
+    doc.setFontSize(7); doc.setTextColor(...PDFX.colors.accent);
     doc.text(`Front wide ${frontWideAngleDeg}\u00b0 up from ear level`, X(0), Yh(plan.earH)-3, {align:'center', maxWidth: wallWmm-10});
   }
   if(wall==='rear' && rearSurroundOffsetFt!==0){
-    doc.setFontSize(7); doc.setTextColor(200,40,40);
+    doc.setFontSize(7); doc.setTextColor(...PDFX.colors.accent);
     doc.text(`${rearSurroundOffsetFt>0?'+':''}${rearSurroundOffsetFt.toFixed(2)}ft from standard rear surround height`, X(0), Yh(plan.H)-3, {align:'center', maxWidth: wallWmm-10});
   }
+  pdfFooter(doc, meta);
 }
 
 // Third PDF page: the speaker/equipment position schedule, in full plain English — the reference
 // sheet an installer actually works from on site, separate from the drawing itself.
-function buildSpeakerPositionPDFPage(doc, plan){
+function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const ink=[32,38,43], muted=[118,127,114], accent3=[8,145,178];
-  let y = margin;
+  const margin = PDFX.margin;
+  const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent3=PDFX.colors.accent;
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink);
-  doc.text('SPEAKER AND EQUIPMENT POSITIONS', margin, y+3);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
-  const clientName = (quote && quote.client && quote.client.name) || 'Untitled project';
-  doc.text(`Prepared for ${clientName} — ${plan.htibMode?'All-in-One System':'Component System'}, ${plan.cfgId.toUpperCase()} configuration`, margin, y+9);
-  y += 16;
-  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
-  doc.line(margin, y, pageW-margin, y);
-  y += 10;
+  const meta = pdfPageMeta(pageNum||7, 'SP');
+  const clientName = meta.project;
+  let y = pdfHeader(doc, meta, pageNum||7, pageCount||7, 'SPEAKER & EQUIPMENT POSITIONS',
+    `${clientName}  ·  ${plan.htibMode?'All-in-One System':'Component System'}  ·  ${plan.cfgId.toUpperCase()}`);
 
   let ty = y;
   const keyMeasurements = computeKeyMeasurements(plan);
   if(keyMeasurements.length){
+    doc.setFillColor(...PDFX.colors.panelTint);
+    const boxH = Math.ceil(keyMeasurements.length/2)*7 + 12;
+    doc.rect(margin, ty, pageW-margin*2, boxH, 'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...accent3);
-    doc.text('Key measurements for marking on site', margin, ty);
+    doc.text('Key measurements for marking on site', margin+6, ty+8);
     doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
-    let mx = margin, my = ty+7;
+    let mx = margin+6, my = ty+16;
     keyMeasurements.forEach((r,i)=>{
       doc.text(`${r.label}: ${fmtFt(r.value)}`, mx, my);
-      if(i%2===1){ mx=margin; my+=6; } else { mx=margin+95; }
+      if(i%2===1){ mx=margin+6; my+=7; } else { mx=margin+100; }
     });
-    ty = my + (keyMeasurements.length%2===1 ? 6 : 0) + 10;
+    ty += boxH + 10;
   }
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...ink);
-  doc.text('Placement schedule', margin, ty);
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...muted);
-  const cols = [margin, margin+82, margin+118, margin+150];
-  ['Speaker / Component','Angle from Seat','Distance from Seat','Cable Length'].forEach((h,i)=> doc.text(h, cols[i], ty+7));
-  doc.setDrawColor(210,210,210); doc.setLineWidth(0.2);
-  doc.line(margin, ty+9, pageW-margin, ty+9);
-  let ry = ty+15;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
+  doc.text('Placement Schedule', margin, ty);
+  ty += 8;
+
+  // table header — bold, on a filled band, columns aligned to a consistent grid
+  const cols = [margin, margin+82, margin+120, margin+155];
+  const colEnd = pageW-margin;
+  const rowH = 9;
+  doc.setFillColor(...PDFX.colors.charcoal);
+  doc.rect(margin, ty, pageW-margin*2, rowH, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(255,255,255);
+  doc.text('SPEAKER / COMPONENT', cols[0]+3, ty+6);
+  doc.text('ANGLE', cols[1], ty+6, {align:'left'});
+  doc.text('DISTANCE', cols[2]+18, ty+6, {align:'right'});
+  doc.text('CABLE LENGTH', colEnd-3, ty+6, {align:'right'});
+  ty += rowH;
+
+  let ry = ty;
+  let rowIdx = 0;
   plan.markers.forEach(m=>{
-    if(ry > pageH - 30){ doc.addPage(); ry = margin+10; }
-    doc.setTextColor(...ink); doc.setFontSize(8.5);
-    doc.text(`${m.num}. ${m.label}`, cols[0], ry, {maxWidth: cols[1]-cols[0]-4});
+    if(ry > pageH - margin - 30){ doc.addPage(); ry = margin+10; rowIdx = 0; }
+    const rH = m.note ? rowH+7 : rowH;
+    if(rowIdx%2===1){
+      doc.setFillColor(...PDFX.colors.panelTint);
+      doc.rect(margin, ry, pageW-margin*2, rH, 'F');
+    }
+    doc.setTextColor(...ink); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    doc.text(`${m.num}. ${m.label}`, cols[0]+3, ry+6, {maxWidth: cols[1]-cols[0]-6});
     doc.setFontSize(8);
-    doc.text(m.angle!=null?`${m.angle} degrees`:(m.ceiling?'Ceiling mount':'—'), cols[1], ry);
-    doc.text(`${Math.hypot(m.x-plan.seat.x, m.y-plan.seat.y).toFixed(1)} ft`, cols[2], ry);
-    doc.text(m.cableFt!=null?`${m.cableFt} ft`:'—', cols[3], ry);
-    ry += 7;
+    doc.text(m.angle!=null?`${m.angle}°`:(m.ceiling?'Ceiling':'—'), cols[1], ry+6);
+    doc.text(`${Math.hypot(m.x-plan.seat.x, m.y-plan.seat.y).toFixed(1)} ft`, cols[2]+18, ry+6, {align:'right'});
+    doc.text(m.cableFt!=null?`${m.cableFt} ft`:'—', colEnd-3, ry+6, {align:'right'});
     if(m.note){
-      doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-      const wrapped = doc.splitTextToSize(m.note, pageW-margin*2-8);
-      doc.text(wrapped, margin+4, ry-2);
-      ry += wrapped.length*3.6 + 2;
+      doc.setFont('helvetica','italic'); doc.setFontSize(7.2); doc.setTextColor(...muted);
+      const wrapped = doc.splitTextToSize(m.note, pageW-margin*2-10);
+      doc.text(wrapped, cols[0]+6, ry+11.5);
       doc.setFont('helvetica','normal');
     }
-    doc.setDrawColor(230,230,230); doc.setLineWidth(0.15);
-    doc.line(margin, ry-3, pageW-margin, ry-3);
+    ry += rH;
+    doc.setDrawColor(...PDFX.colors.hairline); doc.setLineWidth(0.15);
+    doc.line(margin, ry, pageW-margin, ry);
+    rowIdx++;
   });
 
   if(plan.equipment.length){
-    ry += 4;
-    if(ry > pageH - 40){ doc.addPage(); ry = margin+10; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...ink);
-    doc.text('Equipment at the rack', margin, ry); ry += 7;
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
-    plan.equipment.forEach(e=>{
-      doc.text(`${e.num}. ${e.label}`, margin, ry, {maxWidth: pageW-margin*2});
-      ry += 6;
+    ry += 8;
+    if(ry > pageH - margin - 40){ doc.addPage(); ry = margin+10; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
+    doc.text('Equipment at the Rack', margin, ry); ry += 8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+    plan.equipment.forEach((e,i)=>{
+      if(i%2===1){ doc.setFillColor(...PDFX.colors.panelTint); doc.rect(margin, ry-5, pageW-margin*2, 7, 'F'); doc.setTextColor(...ink); }
+      doc.text(`${e.num}. ${e.label}`, margin+3, ry, {maxWidth: pageW-margin*2-6});
+      ry += 7;
     });
   }
 
-  ry += 6;
-  if(ry > pageH - 30){ doc.addPage(); ry = margin+10; }
-  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
-  doc.line(margin, ry-4, pageW-margin, ry-4);
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...ink);
+  ry += 8;
+  if(ry > pageH - margin - 30){ doc.addPage(); ry = margin+10; }
+  doc.setFillColor(...PDFX.colors.panelTint);
+  doc.rect(margin, ry-5, pageW-margin*2, 24, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
   doc.text(`The screen's viewing angle, measured from the listening position, is ${plan.viewAngle.toFixed(0)} degrees. This ${plan.meetsStandard?'meets':'is below'} the ${plan.standard.label} recommended minimum of ${plan.standard.min} degrees.`,
-    margin, ry, {maxWidth: pageW-margin*2});
-  ry += 10;
-  doc.setFontSize(7.5); doc.setTextColor(...muted);
+    margin+5, ry+3, {maxWidth: pageW-margin*2-10});
+  doc.setFontSize(7.3); doc.setTextColor(...muted);
   doc.text('Cable lengths include a 15% allowance for routing and terminations. Speaker positions follow Dolby Atmos Home Theater Installation Guidelines and THX reference angles. These are recommended starting positions — please verify all measurements on site before installation.',
-    margin, ry, {maxWidth: pageW-margin*2});
+    margin+5, ry+13, {maxWidth: pageW-margin*2-10});
+  pdfFooter(doc, meta);
 }
 
 function downloadQuotationPDF(){
@@ -4080,13 +4284,13 @@ function downloadQuotationPDF(){
   if(document.getElementById('includeRoomPlanPDF').checked){
     const plan = computeRoomPlan();
     pdfDoc.addPage();
-    buildRoomPlanDrawingPage(pdfDoc, plan);
-    ['front','left','right','rear'].forEach(wall=>{
+    buildRoomPlanDrawingPage(pdfDoc, plan, 2, 7);
+    ['front','left','right','rear'].forEach((wall,i)=>{
       pdfDoc.addPage();
-      buildWallElevationPDFPage(pdfDoc, plan, wall);
+      buildWallElevationPDFPage(pdfDoc, plan, wall, 3+i, 7);
     });
     pdfDoc.addPage();
-    buildSpeakerPositionPDFPage(pdfDoc, plan);
+    buildSpeakerPositionPDFPage(pdfDoc, plan, 7, 7);
   }
   pdfDoc.save(`budgetfit-quotation-${name}-${quote.date}.pdf`);
   toast('Quotation PDF downloaded' + (document.getElementById('includeRoomPlanPDF').checked ? ' — 7 pages: quote, top-down plan, 4 wall elevations, speaker positions' : ''));
@@ -4100,13 +4304,13 @@ function downloadDrawingsReportPDF(){
   const { jsPDF } = window.jspdf;
   const pdfDoc = new jsPDF({ unit:'mm', format:'a4' });
   const plan = computeRoomPlan();
-  buildRoomPlanDrawingPage(pdfDoc, plan);
-  ['front','left','right','rear'].forEach(wall=>{
+  buildRoomPlanDrawingPage(pdfDoc, plan, 1, 6);
+  ['front','left','right','rear'].forEach((wall,i)=>{
     pdfDoc.addPage();
-    buildWallElevationPDFPage(pdfDoc, plan, wall);
+    buildWallElevationPDFPage(pdfDoc, plan, wall, 2+i, 6);
   });
   pdfDoc.addPage();
-  buildSpeakerPositionPDFPage(pdfDoc, plan);
+  buildSpeakerPositionPDFPage(pdfDoc, plan, 6, 6);
   const name = cf('name') ? cf('name').replace(/[^a-z0-9]+/gi,'-') : 'client';
   const dateStr = (quote && quote.date) || new Date().toISOString().slice(0,10);
   pdfDoc.save(`budgetfit-drawings-${name}-${dateStr}.pdf`);
@@ -5242,21 +5446,33 @@ function computeRoomPlan(){
       const fm = mountExtra('fronts');
       const mountTag = fm.mountNote ? ` (${fm.mountNote})` : '';
       if(screenIsAT){
-        // Acoustic transparent screen — L/C/R sit on-axis directly behind it, not angled out at the
-        // wall. Real angle-from-MLP is computed from the actual position, not the slider default.
-        const off = Math.min(W/2-0.6, screenW/4);
-        const flAngle = Math.round(Math.atan2(off, Math.max(0.1, seat.y-0.3))*180/Math.PI);
-        addM('FL','Front Left Speaker (behind acoustic-transparent screen)'+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), {x:-off, y:0.3}, earH, {angle:flAngle, kind:'speaker', note:'acoustically transparent screen — mounted on-axis behind it'});
-        addM('FR','Front Right Speaker (behind acoustic-transparent screen)'+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), {x:off, y:0.3}, earH, {angle:flAngle, kind:'speaker', note:'acoustically transparent screen — mounted on-axis behind it'});
+        // Acoustic transparent screen — L/R sit on-axis behind it. A typical screen is narrower
+        // than the pure angle-from-MLP trig formula would need at realistic viewing distances, so
+        // instead of computing (and displaying) a geometric angle that's disconnected from the
+        // slider, the slider's 20-35° range maps proportionally across the available screen width —
+        // genuine, visible movement across the FULL slider range regardless of screen size — and
+        // the displayed angle is the slider's own value directly, exactly like the non-AT case
+        // (angle:ang.front below), so the two modes are always consistent with each other. Floor
+        // raised to 55% of the available width so the low end of the slider never places the pair
+        // uncomfortably close together.
+        const maxOff = Math.min(W/2-0.6, screenW/2-0.4);
+        const angleFrac = Math.max(0, Math.min(1, (ang.front-20)/(35-20)));
+        const off = maxOff * (0.55 + angleFrac*0.45);
+        addM('FL','Front Left Speaker (behind acoustic-transparent screen)'+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), {x:-off, y:0.3}, earH, {angle:ang.front, kind:'speaker', note:'acoustically transparent screen — mounted on-axis behind it'});
+        addM('FR','Front Right Speaker (behind acoustic-transparent screen)'+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), {x:off, y:0.3}, earH, {angle:ang.front, kind:'speaker', note:'acoustically transparent screen — mounted on-axis behind it'});
       } else {
-        addM('FL','Front Left Speaker'+mountTag+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), wallPt(-ang.front), earH, Object.assign({angle:ang.front, kind:'speaker'}, fm));
-        addM('FR','Front Right Speaker'+mountTag+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), wallPt(ang.front), earH, Object.assign({angle:ang.front, kind:'speaker'}, fm));
+        const pullOutFt = 1; // typical floor/bookshelf speaker sits proud of the wall — only a genuine in-wall speaker sits flush
+        const flPos = wallPt(-ang.front), frPos = wallPt(ang.front);
+        if(fm.mountNote !== 'in-wall'){ flPos.y = clampY(flPos.y+pullOutFt); frPos.y = clampY(frPos.y+pullOutFt); }
+        addM('FL','Front Left Speaker'+mountTag+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), flPos, earH, Object.assign({angle:ang.front, kind:'speaker'}, fm));
+        addM('FR','Front Right Speaker'+mountTag+(brandLabel('fronts')?' — '+brandLabel('fronts'):''), frPos, earH, Object.assign({angle:ang.front, kind:'speaker'}, fm));
       }
     }
     if(forceFallback || !useQuote || isPresent('center')){
       const cm = mountExtra('center');
       const cMountTag = cm.mountNote ? ` (${cm.mountNote})` : '';
-      addM('C','Center Channel Speaker'+cMountTag+(brandLabel('center')?' — '+brandLabel('center'):''), {x:0,y:screenIsAT?0.3:0.6}, earH, Object.assign({angle:0, kind:'speaker', note:screenIsAT?'acoustically transparent screen — mounted on-axis behind it':undefined}, screenIsAT?{}:cm));
+      const centerY = screenIsAT ? 0.3 : (cm.mountNote==='in-wall' ? 0.6 : 1.4);
+      addM('C','Center Channel Speaker'+cMountTag+(brandLabel('center')?' — '+brandLabel('center'):''), {x:0,y:centerY}, earH, Object.assign({angle:0, kind:'speaker', note:screenIsAT?'acoustically transparent screen — mounted on-axis behind it':undefined}, screenIsAT?{}:cm));
     }
     // Subwoofer count comes straight from the quote's own multiplier (set via the 1-4 button group),
     // so the room plan always matches what's actually quoted. Multiple subs are spread across
@@ -5331,7 +5547,7 @@ function computeRoomPlan(){
   const atmosSepUserVal = atmosSepSliderEl && atmosSepSliderEl.dataset.userSet!==undefined ? +atmosSepSliderEl.value : null;
   const atmosSepDefault = Math.min(W/2-1, W*0.4); // scales with room width instead of a flat cap
   const atmosSide = Math.min(W/2-1, atmosSepUserVal!=null ? atmosSepUserVal : atmosSepDefault);
-  const atmosH = atmosCeilingMounted ? H : Math.min(H-1, 7.5);
+  const atmosH = H;
   const atmosMountTag = atmosCeilingMounted ? 'Ceiling Speaker' : `Atmos Speaker — stacked on the ${atmosItem.mountType==='floorstanding'?'floorstander':'speaker'} below, angled up`;
   if(atmosPairs>=1){
     addM('TFL',`Front Left ${atmosMountTag} (Dolby Atmos)`+(brandLabel('atmos')?' — '+brandLabel('atmos'):''), {x:-atmosSide,y:seat.y-atmosOff}, atmosH, {ceiling:atmosCeilingMounted, kind:'speaker', angle:ang.atmosElev, routeMode:'conduit'});
@@ -5635,6 +5851,16 @@ function drawRoomPlan(){
       parts.push(`<text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="8" font-weight="700" font-family="var(--mono)" fill="#fff">${m.num}</text>`);
       const ly = cy < Y(seat.y) ? cy-14 : cy+20;
       parts.push(`<text x="${cx}" y="${ly}" text-anchor="middle" font-size="8" font-family="var(--body)" fill="var(--muted)">${m.id}${m.angle!=null?` ${m.angle}°`:''}</text>`);
+      // front-wall-to-marker distance — a compact dimension line offset to the side of the icon,
+      // showing how far back from the front wall this speaker/projector actually sits
+      if(m.y > 0.15){
+        const dimMX = cx + 13;
+        parts.push(`<line x1="${cx+9}" y1="${Y(0)}" x2="${dimMX-3}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="0.4"/>`);
+        parts.push(`<line x1="${cx+9}" y1="${cy}" x2="${dimMX-3}" y2="${cy}" stroke="var(--muted)" stroke-width="0.4"/>`);
+        parts.push(`<line x1="${dimMX}" y1="${Y(0)}" x2="${dimMX}" y2="${cy}" stroke="var(--muted)" stroke-width="0.5" marker-start="url(#dimArrowStart)" marker-end="url(#dimArrowEnd)"/>`);
+        parts.push(`<rect x="${dimMX-7}" y="${(Y(0)+cy)/2-16}" width="11" height="32" fill="var(--panel)"/>`);
+        parts.push(`<text x="${dimMX}" y="${(Y(0)+cy)/2}" text-anchor="middle" font-size="7" font-family="var(--mono)" fill="var(--muted)" transform="rotate(-90 ${dimMX} ${(Y(0)+cy)/2})">${fmtFt(m.y)}</text>`);
+      }
     });
   }
 
@@ -5675,7 +5901,7 @@ function drawRoomPlan(){
   }
   parts.push(`<text x="${sx}" y="${scaleY+15}" font-size="7.5" font-family="var(--mono)" fill="var(--muted)">${(nSeg*segFt).toFixed(0)}'</text>`);
 
-  const tbW = 234, tbH = 118;
+  const tbW = 278, tbH = 118;
   const tbX = svgW-rightM-tbW, tbY = stripY-2;
   parts.push(`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="var(--panel)" stroke="var(--ink)" stroke-width="1"/>`);
   const tbRows = [
@@ -5692,7 +5918,7 @@ function drawRoomPlan(){
     const k=row[0], v=row[1];
     parts.push(`<text x="${tbX+8}" y="${ty}" font-size="7.5" font-family="var(--mono)" fill="var(--muted)" letter-spacing="0.3">${k}</text>`);
     const vs = String(v);
-    parts.push(`<text x="${tbX+tbW-8}" y="${ty}" text-anchor="end" font-size="9" font-family="var(--body)" font-weight="600" fill="var(--ink)">${vs.length>28?vs.slice(0,27)+'…':vs}</text>`);
+    parts.push(`<text x="${tbX+tbW-8}" y="${ty}" text-anchor="end" font-size="9" font-family="var(--body)" font-weight="600" fill="var(--ink)">${vs.length>34?vs.slice(0,33)+'…':vs}</text>`);
     ty += 15.5;
   });
 
@@ -5787,8 +6013,63 @@ function drawRoomPlanThrottled(){
   if(_rpRaf) return;
   _rpRaf = requestAnimationFrame(()=>{ _rpRaf = null; drawRoomPlan(); });
 }
+// Redraws whichever view is CURRENTLY ON SCREEN — top-down or any wall elevation — throttled via
+// requestAnimationFrame for smooth slider dragging. This is what every configurator control should
+// call, not drawRoomPlanThrottled() directly: that only ever redraws the top-down SVG, so a slider
+// wired to it silently does nothing when you're actually looking at an elevation view.
+let _rpActiveRaf = null;
+function redrawActiveRoomPlanView(){
+  if(_rpActiveRaf) return;
+  _rpActiveRaf = requestAnimationFrame(()=>{
+    _rpActiveRaf = null;
+    const wallBtns = {front:'rpViewFrontBtn', left:'rpViewLeftBtn', right:'rpViewRightBtn', rear:'rpViewRearBtn'};
+    const activeWall = Object.keys(wallBtns).find(w => document.getElementById(wallBtns[w]).classList.contains('on'));
+    if(activeWall) drawWallElevation(activeWall);
+    else drawRoomPlan();
+  });
+}
 // Redraws whichever view is currently on screen — top-down or any wall elevation — without
 // switching views, for whenever something's changed and the drawing hasn't visibly caught up.
+// Collapses the drawing to a small preview strip, freeing the fixed-height layout's remaining
+// space for the configurator below — the two can't both be large at once on a phone screen, so
+// this lets the person choose which one they need right now. Preference persists across sessions.
+function toggleRoomPlanScheduleVisibility(){
+  const body = document.getElementById('roomPlanScheduleBody');
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  document.getElementById('rpScheduleToggleBtn').textContent = hidden ? 'Hide' : 'Show';
+  store.set('bf_rp_schedule_hidden', !hidden);
+}
+function loadRoomPlanScheduleVisibilityState(){
+  const body = document.getElementById('roomPlanScheduleBody');
+  if(!body) return;
+  const hidden = !!store.get('bf_rp_schedule_hidden');
+  body.style.display = hidden ? 'none' : '';
+  document.getElementById('rpScheduleToggleBtn').textContent = hidden ? 'Show' : 'Hide';
+}
+function toggleRoomPlanDescriptions(){
+  const card = document.getElementById('rpConfiguratorCard');
+  const hidden = card.classList.toggle('rp-hide-desc');
+  document.getElementById('rpHideDescBtn').textContent = hidden ? 'Show descriptions' : 'Hide descriptions';
+  store.set('bf_rp_hide_desc', hidden);
+}
+function loadRoomPlanDescriptionsState(){
+  const card = document.getElementById('rpConfiguratorCard');
+  if(!card) return;
+  const hidden = !!store.get('bf_rp_hide_desc');
+  card.classList.toggle('rp-hide-desc', hidden);
+  document.getElementById('rpHideDescBtn').textContent = hidden ? 'Show descriptions' : 'Hide descriptions';
+}
+function toggleRoomPlanCollapse(){
+  const card = document.querySelector('.rp-plan-card');
+  const collapsed = card.classList.toggle('rp-collapsed');
+  store.set('bf_rp_collapsed', collapsed);
+}
+function loadRoomPlanCollapseState(){
+  const card = document.querySelector('.rp-plan-card');
+  if(!card) return;
+  card.classList.toggle('rp-collapsed', !!store.get('bf_rp_collapsed'));
+}
 function refreshRoomPlanView(){
   const wallBtns = {front:'rpViewFrontBtn', left:'rpViewLeftBtn', right:'rpViewRightBtn', rear:'rpViewRearBtn'};
   const activeWall = Object.keys(wallBtns).find(w => document.getElementById(wallBtns[w]).classList.contains('on'));
@@ -5914,9 +6195,15 @@ function drawWallElevation(wall){
     const screenBottomH = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
     const screenWpx = screenW*pxPerFt, screenHpx = screenH*pxPerFt;
     const screenX = xPx(0) - screenWpx/2, screenTopY = yPx(screenBottomH+screenH);
-    parts.push(`<rect x="${screenX}" y="${screenTopY}" width="${screenWpx}" height="${screenHpx}" fill="var(--near-black)" stroke="var(--ink)" stroke-width="1.5" rx="2"/>`);
-    parts.push(`<rect x="${screenX+screenWpx*0.04}" y="${screenTopY+screenHpx*0.04}" width="${screenWpx*0.92}" height="${screenHpx*0.92}" fill="#1a2530"/>`);
+    parts.push(`<rect x="${screenX}" y="${screenTopY}" width="${screenWpx}" height="${screenHpx}" fill="#ffffff" stroke="var(--ink)" stroke-width="1.8" rx="2"/>`);
+    parts.push(`<rect x="${screenX+screenWpx*0.04}" y="${screenTopY+screenHpx*0.04}" width="${screenWpx*0.92}" height="${screenHpx*0.92}" fill="none" stroke="var(--border2)" stroke-width="0.8"/>`);
     parts.push(`<text x="${xPx(0)}" y="${screenTopY-8}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--muted)">SCREEN ${fmtFt(screenH)} × ${fmtFt(screenW)}, sill ${fmtFt(screenBottomH)}</text>`);
+    // diagonal measurement — corner to corner, matching the screen's actual quoted diagonal size
+    const dx1=screenX, dy1=screenTopY+screenHpx, dx2=screenX+screenWpx, dy2=screenTopY;
+    parts.push(`<line x1="${dx1}" y1="${dy1}" x2="${dx2}" y2="${dy2}" stroke="var(--accent3)" stroke-width="0.8" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+    const dmx=(dx1+dx2)/2, dmy=(dy1+dy2)/2, diagAngleDeg = Math.atan2(dy1-dy2, dx2-dx1)*180/Math.PI;
+    parts.push(`<rect x="${dmx-22}" y="${dmy-8}" width="44" height="14" fill="var(--panel)"/>`);
+    parts.push(`<text x="${dmx}" y="${dmy+3}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--accent3)" transform="rotate(${-diagAngleDeg} ${dmx} ${dmy})">${plan.screenIn}" diag</text>`);
   }
 
   let relevant;
@@ -5928,7 +6215,7 @@ function drawWallElevation(wall){
   if(!relevant.length){
     parts.push(`<text x="${svgW/2}" y="${(ceilY+floorY)/2}" text-anchor="middle" font-size="11" font-family="var(--body)" fill="var(--muted)">No speakers positioned on this wall for the current system</text>`);
   } else {
-    relevant.forEach(m=>{
+    relevant.forEach((m,mi)=>{
       let h = m.h;
       if(wall==='front' && (m.id==='FL' || m.id==='FR')) h = frontSpeakerH;
       else if(wall==='front' && m.id==='C') h = centerSpeakerH;
@@ -5948,6 +6235,14 @@ function drawWallElevation(wall){
       parts.push(`<line x1="${dimX}" y1="${floorY}" x2="${dimX}" y2="${py}" stroke="var(--muted)" stroke-width="0.6" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
       parts.push(`<rect x="${dimX-8}" y="${(floorY+py)/2-20}" width="12" height="40" fill="var(--panel)"/>`);
       parts.push(`<text x="${dimX}" y="${(floorY+py)/2}" text-anchor="middle" font-size="8" font-family="var(--mono)" fill="var(--muted)" transform="rotate(-90 ${dimX} ${(floorY+py)/2})">${fmtFt(h)}</text>`);
+      // horizontal distance-along-wall dimension — how far this marker sits from the wall's
+      // starting edge (front wall, for left/right views; side wall, for front/rear views).
+      // Stacked one row per marker below the main width dimension so multiple markers never overlap.
+      const rowY = dimYB + 16 + mi*13;
+      const edgePx = xPx(edge0);
+      parts.push(`<line x1="${edgePx}" y1="${rowY}" x2="${px}" y2="${rowY}" stroke="var(--accent3)" stroke-width="0.5" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+      parts.push(`<rect x="${(edgePx+px)/2-24}" y="${rowY-6}" width="48" height="10" fill="var(--panel)"/>`);
+      parts.push(`<text x="${(edgePx+px)/2}" y="${rowY+3}" text-anchor="middle" font-size="7.5" font-family="var(--mono)" fill="var(--accent3)">${m.id} ${fmtFt(Math.abs(posFt-edge0))}</text>`);
       if(wall==='front' && frontAngleDeg>0 && (m.id==='FL'||m.id==='FR')){
         parts.push(`<line x1="${xPx(0)}" y1="${yPx(earH)}" x2="${px}" y2="${py}" stroke="var(--red)" stroke-width="1" stroke-dasharray="3,3"/>`);
       }
@@ -5982,7 +6277,7 @@ function drawWallElevation(wall){
   const settings = getSettings();
   const today = new Date().toISOString().slice(0,10);
   const stripY = svgH - bottomStripH + 60;
-  const tbW = 260, tbH = bottomStripH - 74;
+  const tbW = 300, tbH = bottomStripH - 74;
   const tbX = svgW-rightM-tbW, tbY = stripY-2;
   parts.push(`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="var(--panel)" stroke="var(--ink)" stroke-width="1"/>`);
   const tbRows = [
@@ -5998,7 +6293,7 @@ function drawWallElevation(wall){
     const k=row[0], v=row[1];
     parts.push(`<text x="${tbX+8}" y="${ty}" font-size="7.5" font-family="var(--mono)" fill="var(--muted)" letter-spacing="0.3">${k}</text>`);
     const vs = String(v);
-    parts.push(`<text x="${tbX+tbW-8}" y="${ty}" text-anchor="end" font-size="9" font-family="var(--body)" font-weight="600" fill="var(--ink)">${vs.length>28?vs.slice(0,27)+'…':vs}</text>`);
+    parts.push(`<text x="${tbX+tbW-8}" y="${ty}" text-anchor="end" font-size="9" font-family="var(--body)" font-weight="600" fill="var(--ink)">${vs.length>34?vs.slice(0,33)+'…':vs}</text>`);
     ty += 15.5;
   });
 
@@ -6016,7 +6311,7 @@ function onThrowSliderInput(){
   const slider = document.getElementById('rpThrowSlider');
   slider.dataset.userSet = '1';
   document.getElementById('rpThrowVal').textContent = (+slider.value).toFixed(1)+'ft';
-  drawRoomPlanThrottled();
+  redrawActiveRoomPlanView();
 }
 // Default separation scales with room width (Math.min(W/2-1, W*0.4)) so it's never displayed
 // until we know W — updates the readout and, on first load only, sets a starting value.
@@ -6032,11 +6327,11 @@ function onAtmosSepInput(){
   const slider = document.getElementById('rpAtmosSep');
   slider.dataset.userSet = '1';
   document.getElementById('rpAtmosSepVal').textContent = (+slider.value).toFixed(1)+'ft';
-  drawRoomPlanThrottled();
+  redrawActiveRoomPlanView(); // Atmos separation is visible on top-down AND the left/right wall views
 }
 function onSubDistInput(){
   document.getElementById('rpSubDistVal').textContent = (+document.getElementById('rpSubDist').value).toFixed(2)+'ft';
-  drawRoomPlanThrottled();
+  redrawActiveRoomPlanView(); // sub distance is visible on top-down AND the front/rear wall views
 }
 // CSS-based fullscreen rather than the Fullscreen API: iOS Safari doesn't support that API on
 // arbitrary elements (only video), so a class toggle is the only approach that works everywhere.
@@ -6046,6 +6341,13 @@ function isRoomPlanFullscreen(){ return document.querySelector('.rp-plan-card').
 function toggleRoomPlanFullscreen(){
   const card = document.querySelector('.rp-plan-card');
   const on = card.classList.toggle('fullscreen');
+  if(on && card.classList.contains('rp-collapsed')){
+    card.dataset.wasCollapsed = '1';
+    card.classList.remove('rp-collapsed'); // fullscreen always shows the full drawing
+  } else if(!on && card.dataset.wasCollapsed){
+    card.classList.add('rp-collapsed');
+    delete card.dataset.wasCollapsed;
+  }
   document.body.classList.toggle('rp-fs-open', on);
   const btn = document.getElementById('rpFsBtn');
   document.getElementById('rpFsIcon').innerHTML = on ? RP_FS_ICON_EXIT : RP_FS_ICON_ENTER;
