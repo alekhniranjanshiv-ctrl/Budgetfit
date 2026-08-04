@@ -5019,7 +5019,7 @@ function importXLSX(inp){
       for(let ri=1; ri<rows.length; ri++){
         const r = rows[ri];
         const rawName = String(r[nameIx]||'').trim();
-        const price = +r[priceIx];
+        const price = parseImportNumber(r[priceIx]);
         if(!rawName || !price) continue;
         const desc = descIx>=0 ? String(r[descIx]||'') : '';
         const {brand, model} = splitBrandModel(rawName);
@@ -5066,6 +5066,20 @@ function findExistingItem(cat, brand, model, extra){
   return candidates[0];
 }
 
+// Tolerant number parser for imported spreadsheet cells — strips thousands separators and
+// whitespace before converting, so a price typed with comma grouping (Indian lakh-style
+// "1,65,990" or standard "165,990") parses correctly instead of silently becoming NaN. A bare
+// unary-plus conversion (+cellValue) cannot parse any comma-containing string, and Excel stores
+// such a value as plain text whenever it doesn't match its own locale's number-format pattern —
+// most commonly when Indian lakh/crore grouping (groups of 2) is typed in a sheet still set to
+// Western thousands grouping (groups of 3), which the cell's General format doesn't recognise as
+// a number at all.
+function parseImportNumber(v){
+  if(v==null || v==='') return NaN;
+  if(typeof v === 'number') return v;
+  const cleaned = String(v).replace(/,/g,'').trim();
+  return cleaned==='' ? NaN : +cleaned;
+}
 function importNativeRows(rows, ix, inp){
   const catIds = new Set(cats.map(c=>c.id));
   const catByName = {}; cats.forEach(c=>catByName[c.name.toLowerCase()]=c.id);
@@ -5082,41 +5096,41 @@ function importNativeRows(rows, ix, inp){
       cid = raw.toLowerCase().replace(/[^a-z0-9]+/g,'');
       if(!catIds.has(cid)){ cats.push({id:cid,name:raw,weight:3,enabled:true}); catIds.add(cid); }
     }
-    const price = +r[ix.price];
+    const price = parseImportNumber(r[ix.price]);
     const brand = String(r[ix.brand]||'').trim(), model = String(r[ix.model]||'').trim();
     if(!brand||!model||!price){ skipped++; continue; }
-    const qty = Math.max(1, +(r[ix.qty]||1));
-    const channels = ix.channels>=0 ? (+r[ix.channels]||null) : null;
+    const qty = Math.max(1, parseImportNumber(r[ix.qty])||1);
+    const channels = ix.channels>=0 ? (parseImportNumber(r[ix.channels])||null) : null;
     const screenType = ix.screentype>=0 && r[ix.screentype] ? String(r[ix.screentype]).trim().toLowerCase() : null;
     const acousticTransparent = ix.at>=0 ? /^(y|yes|true|1)$/i.test(String(r[ix.at]||'')) : false;
     const resolution = ix.resolution>=0 && r[ix.resolution] ? String(r[ix.resolution]).trim().toUpperCase() : null;
     const lightSource = ix.lightsource>=0 && r[ix.lightsource] ? String(r[ix.lightsource]).trim() : null;
-    const screenSize = ix.screensize>=0 ? (+r[ix.screensize]||null) : null;
+    const screenSize = ix.screensize>=0 ? (parseImportNumber(r[ix.screensize])||null) : null;
     const mountType = ix.mounttype>=0 && r[ix.mounttype] ? String(r[ix.mounttype]).trim().toLowerCase() : null;
     const specs = ix.specs>=0 && r[ix.specs] ? parseSpecsText(String(r[ix.specs]).split('|').join('\n')) : null;
     const avrType = (ix.avrtype>=0 && r[ix.avrtype]) ? String(r[ix.avrtype]).trim().toLowerCase()
       : cid==='avr' ? 'receiver' : cid==='avprocessor' ? 'processor' : null;
     const ambientLightRejecting = ix.alr>=0 ? /^(y|yes|true|1)$/i.test(String(r[ix.alr]||'')) : false;
-    const cableLength = ix.cablelength>=0 ? (+r[ix.cablelength]||null) : null;
-    const cableGauge = ix.cablegauge>=0 ? (+r[ix.cablegauge]||null) : null;
-    const hdmiLength = ix.hdmilength>=0 ? (+r[ix.hdmilength]||null) : null;
+    const cableLength = ix.cablelength>=0 ? (parseImportNumber(r[ix.cablelength])||null) : null;
+    const cableGauge = ix.cablegauge>=0 ? (parseImportNumber(r[ix.cablegauge])||null) : null;
+    const hdmiLength = ix.hdmilength>=0 ? (parseImportNumber(r[ix.hdmilength])||null) : null;
     const hdmiSpec = ix.hdmispec>=0 && r[ix.hdmispec] ? String(r[ix.hdmispec]).trim() : null;
     const subType = ix.subtype>=0 && r[ix.subtype] ? String(r[ix.subtype]).trim() : null;
-    const subDriverSize = ix.subdriversize>=0 ? (+r[ix.subdriversize]||null) : null;
+    const subDriverSize = ix.subdriversize>=0 ? (parseImportNumber(r[ix.subdriversize])||null) : null;
     const variant = ix.variant>=0 && r[ix.variant] ? String(r[ix.variant]).trim() : null;
-    const marginPct = ix.marginpct>=0 ? (+r[ix.marginpct]||0) : null;
+    const marginPct = ix.marginpct>=0 ? (parseImportNumber(r[ix.marginpct])||0) : null;
     const taxInclusive = ix.taxinclusive>=0 && r[ix.taxinclusive] ? !/^(no|false|0|excl)/i.test(String(r[ix.taxinclusive])) : null;
-    const gstRateImp = ix.gstrate>=0 && r[ix.gstrate]!=='' && r[ix.gstrate]!=null ? (+r[ix.gstrate]||null) : null;
-    const preoutChannelsImp = ix.preoutchannels>=0 && r[ix.preoutchannels]!=='' && r[ix.preoutchannels]!=null ? (+r[ix.preoutchannels]||null) : null;
+    const gstRateImp = ix.gstrate>=0 && r[ix.gstrate]!=='' && r[ix.gstrate]!=null ? (parseImportNumber(r[ix.gstrate])||null) : null;
+    const preoutChannelsImp = ix.preoutchannels>=0 && r[ix.preoutchannels]!=='' && r[ix.preoutchannels]!=null ? (parseImportNumber(r[ix.preoutchannels])||null) : null;
     const aspectRatioImp = ix.aspectratio>=0 && r[ix.aspectratio] ? String(r[ix.aspectratio]).trim() : null;
-    const throwRatioMinImp = ix.throwratiomin>=0 && r[ix.throwratiomin]!=='' && r[ix.throwratiomin]!=null ? (+r[ix.throwratiomin]||null) : null;
-    const throwRatioMaxImp = ix.throwratiomax>=0 && r[ix.throwratiomax]!=='' && r[ix.throwratiomax]!=null ? (+r[ix.throwratiomax]||null) : null;
-    const rmsPowerImp = ix.rmspower>=0 && r[ix.rmspower]!=='' && r[ix.rmspower]!=null ? (+r[ix.rmspower]||null) : null;
-    const ratedImpedanceImp = ix.ratedimpedance>=0 && r[ix.ratedimpedance]!=='' && r[ix.ratedimpedance]!=null ? (+r[ix.ratedimpedance]||null) : null;
-    const sensitivityImp = ix.sensitivity>=0 && r[ix.sensitivity]!=='' && r[ix.sensitivity]!=null ? (+r[ix.sensitivity]||null) : null;
-    const powerHandlingMinImp = ix.powerhandlingmin>=0 && r[ix.powerhandlingmin]!=='' && r[ix.powerhandlingmin]!=null ? (+r[ix.powerhandlingmin]||null) : null;
-    const powerHandlingMaxImp = ix.powerhandlingmax>=0 && r[ix.powerhandlingmax]!=='' && r[ix.powerhandlingmax]!=null ? (+r[ix.powerhandlingmax]||null) : null;
-    const impedanceImp = ix.impedance>=0 && r[ix.impedance]!=='' && r[ix.impedance]!=null ? (+r[ix.impedance]||null) : null;
+    const throwRatioMinImp = ix.throwratiomin>=0 && r[ix.throwratiomin]!=='' && r[ix.throwratiomin]!=null ? (parseImportNumber(r[ix.throwratiomin])||null) : null;
+    const throwRatioMaxImp = ix.throwratiomax>=0 && r[ix.throwratiomax]!=='' && r[ix.throwratiomax]!=null ? (parseImportNumber(r[ix.throwratiomax])||null) : null;
+    const rmsPowerImp = ix.rmspower>=0 && r[ix.rmspower]!=='' && r[ix.rmspower]!=null ? (parseImportNumber(r[ix.rmspower])||null) : null;
+    const ratedImpedanceImp = ix.ratedimpedance>=0 && r[ix.ratedimpedance]!=='' && r[ix.ratedimpedance]!=null ? (parseImportNumber(r[ix.ratedimpedance])||null) : null;
+    const sensitivityImp = ix.sensitivity>=0 && r[ix.sensitivity]!=='' && r[ix.sensitivity]!=null ? (parseImportNumber(r[ix.sensitivity])||null) : null;
+    const powerHandlingMinImp = ix.powerhandlingmin>=0 && r[ix.powerhandlingmin]!=='' && r[ix.powerhandlingmin]!=null ? (parseImportNumber(r[ix.powerhandlingmin])||null) : null;
+    const powerHandlingMaxImp = ix.powerhandlingmax>=0 && r[ix.powerhandlingmax]!=='' && r[ix.powerhandlingmax]!=null ? (parseImportNumber(r[ix.powerhandlingmax])||null) : null;
+    const impedanceImp = ix.impedance>=0 && r[ix.impedance]!=='' && r[ix.impedance]!=null ? (parseImportNumber(r[ix.impedance])||null) : null;
     const unitTypeImp = ix.unittype>=0 && r[ix.unittype] ? String(r[ix.unittype]).trim().toLowerCase() : 'each';
     const existing = findExistingItem(cid, brand, model, {screenSize, aspectRatio: aspectRatioImp, cableLength, hdmiLength, subDriverSize, channels});
     if(existing){
