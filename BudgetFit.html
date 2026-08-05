@@ -1253,13 +1253,19 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <p class="hint" id="miZoomRatioPreview" style="margin-top:-6px;margin-bottom:8px"></p>
       <div class="mrow" id="miMountRow" style="display:none">
         <label class="hint">Mounting <span class="hint" style="text-transform:none">— in-ceiling speakers are drawn on the ceiling in the Room Plan; a bookshelf model used for Atmos duty is still drawn at height, not on the ceiling</span></label>
-        <select id="miMountType">
+        <select id="miMountType" onchange="syncCategoryFieldsVisibility()">
           <option value="floorstanding">Floor standing</option>
           <option value="bookshelf">Bookshelf</option>
           <option value="satellite">Satellite</option>
           <option value="inwall">In-wall</option>
           <option value="inceiling">In-ceiling</option>
         </select>
+      </div>
+      <div class="mrow" id="miAlsoSurroundRow" style="display:none">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="miAlsoSurround" style="width:auto">
+          <span class="hint" style="text-transform:none">This in-wall model can also be used as Surround speakers <span class="hint" style="text-transform:none">— many in-wall lines use the same enclosure for L/C/R and surround duty (unlike a dedicated MTM centre), so the same product becomes a candidate for both categories</span></span>
+        </label>
       </div>
       <div class="row" id="miSpeakerSpecRow" style="display:none">
         <div class="field"><label>Sensitivity (dB) <span class="hint" style="text-transform:none">— @ 1W/1m, from the datasheet</span></label>
@@ -1666,7 +1672,7 @@ function computeEquipmentTotals(sel, ch, htibMode, subCount, gstRate, qtyOverrid
     const it = items.find(i=>i.id===sel[c.id]);
     if(!it) return;
     const baseMult = multFor(c.id,ch,htibMode,subCount);
-    const mult = c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
+    const mult = baseMult===1 && c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
     const sellSubtotal = eff(it) * mult;
     const inclusive = it.taxInclusive !== false;
     const lineGstRate = it.gstRate!=null ? it.gstRate : gstRate;
@@ -2732,7 +2738,16 @@ const CENTER_MOUNT_FILTER_OPTS = [['','Any'],['bookshelf','Bookshelf'],['satelli
 // Falls back to the full brand-filtered list if nothing in the catalog matches this exact mount
 // type, same graceful-degrade pattern as every other preference filter in the app.
 function catItemsForSpeaker(catId){
-  const all = catItemsPref(catId);
+  let all = catItemsPref(catId);
+  if(catId==='surrounds'){
+    // Some in-wall Front L/R models are also valid for surround duty — same enclosure/drivers as
+    // the front pair, unlike a dedicated MTM centre design, so the same physical product can
+    // legitimately serve either role. A checkbox on the item (Front L/R, in-wall only) flags this,
+    // letting the allocator treat it as a real surround candidate instead of needing a duplicate
+    // catalog entry for what's actually the same speaker.
+    const borrowedFromFronts = items.filter(it => it.cat==='fronts' && it.usableAsSurround);
+    if(borrowedFromFronts.length) all = all.concat(borrowedFromFronts);
+  }
   if(!MOUNT_CATS.includes(catId)) return all;
   const pref = moreFilterPrefs[catId+'Mount'];
   if(!pref) return all;
@@ -3360,8 +3375,30 @@ function buildPrintSheet(T, ch){
 
 // View a confirmed Dashboard record's quotation as a PDF-style preview without loading it
 // into the active Quote tab (doesn't touch the current working quote/items/cats).
-function previewConfirmedPDF(id){
+// Returns the data to show for a confirmed quote record — LIVE, freshly computed data if this
+// is the same quote currently being actively edited (even if edited since it was last confirmed),
+// or the stored historical snapshot otherwise. Without this, editing a confirmed quote's
+// quantities/selections and checking its Dashboard preview without re-confirming first would show
+// stale numbers — a real risk for a business-critical figure like profit margin.
+function getEffectiveConfirmedRecord(id){
   const rec = confirmedQuotes.find(r=>r.id===id);
+  if(!rec) return null;
+  if(quote && quote.confirmedId===id){
+    const T = computeQuoteTotals(quote);
+    return Object.assign({}, rec, {
+      client:quote.client, budget:quote.budget, discount:quote.discount, channel:quote.channel,
+      services:quote.services||[], gstRate:(quote.gstRate!=null)?quote.gstRate:18, htib:!!quote.htib,
+      installPct:quote.installPct||0, installMin:(quote.installMin!=null)?quote.installMin:2500, subCount:Math.max(1,quote.subCount||1),
+      selections:quote.selections, qtyOverrides:quote.qtyOverrides||{},
+      lines:T.lines, serviceLines:T.serviceLines,
+      equipTotal:T.equipTotal, serviceTotal:T.serviceTotal, gross:T.gross,
+      discAmt:T.discAmt, taxable:T.taxable, gstAmt:T.gstAmt, net:T.net,
+    });
+  }
+  return rec;
+}
+function previewConfirmedPDF(id){
+  const rec = getEffectiveConfirmedRecord(id);
   if(!rec){ toast('Quote record not found'); return; }
   document.getElementById('pdfPreviewBody').innerHTML = renderQuotationSheetHTML(rec);
   document.getElementById('pdfPreviewBg').classList.add('show');
@@ -3411,22 +3448,30 @@ function renderProfitBreakdownHTML(q){
   const P = computeProfitBreakdown(q);
   const client = q.client || {};
   // Per-product breakdown, same table structure as the client-facing quotation sheet (same .ps
-  // class) — just with Cost/Sell/Margin columns instead of Qty/Unit/Amount. Margin here is BEFORE
-  // any quote-level discount, since discount is applied to the total, not to individual products —
-  // the aggregate summary below is what reflects the discount correctly.
-  let rows='', n=0, sumCost=0, sumSell=0;
+  // class) — Cost/Sell here are PER UNIT, same "Unit → Amount" pattern as the client sheet's own
+  // Qty/Unit/Amount columns, so Qty × Cost visibly reconstructs the line's total cost instead of
+  // Cost already secretly being the line total (which made Qty × Cost silently wrong, and made
+  // cost and sell look identical for a zero-margin item's ALREADY-multiplied totals rather than
+  // showing the actual per-unit prices side by side). Margin here is BEFORE any quote-level
+  // discount, since discount is applied to the total, not to individual products — the aggregate
+  // summary below is what reflects the discount correctly.
+  let rows='', n=0, sumCostTotal=0, sumSellTotal=0;
   P.T.lines.forEach(line=>{
     const qty = (line.catalogQty||1)*(line.mult||1);
-    const cost = line.unitPrice * qty;
-    const sell = line.lineTotal;
-    const marginAmt = sell - cost;
-    const marginPctActual = cost>0 ? (marginAmt/cost*100) : 0;
-    sumCost += cost; sumSell += sell;
-    rows += `<tr><td>${++n}</td><td>${line.catName}</td><td>${line.brand} ${line.model}</td><td class="r">${qty}</td><td class="r">${fmt(cost)}</td><td class="r">${fmt(sell)}</td><td class="r">${marginPctActual.toFixed(1)}%</td><td class="r">${fmt(marginAmt)}</td></tr>`;
+    const costEach = line.unitPrice;
+    const sellTotal = line.lineTotal;
+    const sellEach = qty>0 ? sellTotal/qty : sellTotal;
+    const costTotal = costEach * qty;
+    const marginAmt = sellTotal - costTotal;
+    const marginPctActual = costTotal>0 ? (marginAmt/costTotal*100) : 0;
+    sumCostTotal += costTotal; sumSellTotal += sellTotal;
+    rows += `<tr><td>${++n}</td><td>${line.catName}</td><td>${line.brand} ${line.model}</td><td class="r">${qty}</td><td class="r">${fmt(costEach)}</td><td class="r">${fmt(sellEach)}</td><td class="r">${marginPctActual.toFixed(1)}%</td><td class="r">${fmt(marginAmt)}</td></tr>`;
   });
   P.T.serviceLines.forEach(sl=>{
-    // Services have no distributor cost — 100% of the line is margin.
-    rows += `<tr><td>${++n}</td><td>Service</td><td>${sl.desc}</td><td class="r">${sl.qty}</td><td class="r">—</td><td class="r">${fmt(sl.lineTotal)}</td><td class="r">100%</td><td class="r">${fmt(sl.lineTotal)}</td></tr>`;
+    // Services have no distributor cost — 100% of the line is margin. Rate IS already per-unit
+    // here (that's how services are entered), so no per-unit/total distinction needed.
+    sumSellTotal += sl.lineTotal;
+    rows += `<tr><td>${++n}</td><td>Service</td><td>${sl.desc}</td><td class="r">${sl.qty}</td><td class="r">—</td><td class="r">${fmt(sl.rate)}</td><td class="r">100%</td><td class="r">${fmt(sl.lineTotal)}</td></tr>`;
   });
   const discountNote = (q.discount>0)
     ? `<p class="hint" style="margin:8px 0 0">Table above is per-product, before the ${q.discount}% quote-level discount (discount reduces the total, not individual products) — "Margin earned" below reflects the discount correctly.</p>`
@@ -3436,9 +3481,10 @@ function renderProfitBreakdownHTML(q){
       <div><b>Quote for:</b> ${client.name||'—'} ${q.quoteNo?'&nbsp;·&nbsp; <b>#</b> '+q.quoteNo:''}</div>
       <div><b>Date:</b> ${q.date||''}</div>
     </div>
-    <table class="ps"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="r">Qty</th><th class="r">Cost</th><th class="r">Sell</th><th class="r">Margin %</th><th class="r">Margin ₹</th></tr></thead>
+    <p class="hint" style="margin-bottom:8px">Cost and Sell below are PER UNIT — multiply by Qty to get the line total. Margin ₹ is already the total for the whole line.</p>
+    <table class="ps"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="r">Qty</th><th class="r">Cost/each</th><th class="r">Sell/each</th><th class="r">Margin %</th><th class="r">Margin ₹</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>${fmt(sumCost)}</b></td><td class="r"><b>${fmt(sumSell)}</b></td><td></td><td class="r"><b>${fmt(sumSell-sumCost)}</b></td></tr></tfoot>
+      <tfoot><tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>${fmt(sumCostTotal)}</b></td><td class="r"><b>${fmt(sumSellTotal)}</b></td><td></td><td class="r"><b>${fmt(sumSellTotal-sumCostTotal)}</b></td></tr></tfoot>
     </table>
     ${discountNote}
     <div class="ps-tot">
@@ -3459,7 +3505,7 @@ function renderProfitBreakdownHTML(q){
 // Mirrors previewConfirmedPDF exactly — same "look but don't touch the working quote" pattern —
 // just renders the profit breakdown instead of the client-facing sheet.
 function previewConfirmedProfit(id){
-  const rec = confirmedQuotes.find(r=>r.id===id);
+  const rec = getEffectiveConfirmedRecord(id);
   if(!rec){ toast('Quote record not found'); return; }
   document.getElementById('profitPreviewBody').innerHTML = renderProfitBreakdownHTML(rec);
   document.getElementById('profitPreviewBg').classList.add('show');
@@ -3671,7 +3717,7 @@ function confirmQuote(){
     date:quote.date, quoteNo:quote.quoteNo, validityDays:quote.validityDays||15,
     services:quote.services||[], gstRate:(quote.gstRate!=null)?quote.gstRate:18, htib:!!quote.htib,
     installPct:quote.installPct||0, installMin:(quote.installMin!=null)?quote.installMin:2500, subCount:Math.max(1,quote.subCount||1),
-    selections:quote.selections,
+    selections:quote.selections, qtyOverrides:quote.qtyOverrides||{},
     lines:T.lines, serviceLines:T.serviceLines,
     equipTotal:T.equipTotal, serviceTotal:T.serviceTotal, gross:T.gross,
     discAmt:T.discAmt, taxable:T.taxable, gstAmt:T.gstAmt, net:T.net
@@ -3967,11 +4013,19 @@ function buildRoomPlanDrawingPage(doc, plan, pageNum, pageCount){
   });
   doc.setLineDashPattern([], 0);
 
-  // MLP
-  doc.setDrawColor(...ink); doc.setLineWidth(0.4);
-  doc.circle(X(plan.seat.x), Y(plan.seat.y), 2.4, 'S');
-  doc.setFillColor(...ink);
-  doc.circle(X(plan.seat.x), Y(plan.seat.y), 0.6, 'F');
+  // MLP — recliner icon, birds-eye view, matching the on-screen drawing
+  {
+    const rW = 2.3*mmPerFt, rD = 3*mmPerFt;
+    const rx0 = X(plan.seat.x)-rW/2, ry0 = Y(plan.seat.y)-rD*0.55;
+    doc.setDrawColor(...ink); doc.setLineWidth(0.35);
+    doc.setFillColor(...PDFX.colors.panelTint);
+    doc.rect(rx0, ry0, rW, rD, 'FD');
+    doc.line(rx0+rW*0.1, ry0+rD*0.78, rx0+rW*0.9, ry0+rD*0.78);
+    doc.rect(rx0-rW*0.1, ry0+rD*0.15, rW*0.16, rD*0.55, 'S');
+    doc.rect(rx0+rW*0.94, ry0+rD*0.15, rW*0.16, rD*0.55, 'S');
+    doc.setFillColor(...ink);
+    doc.circle(X(plan.seat.x), Y(plan.seat.y), 0.5, 'F');
+  }
   doc.setFontSize(6.5); doc.setTextColor(...muted);
   doc.text('MLP', X(plan.seat.x), Y(plan.seat.y)+5, {align:'center'});
 
@@ -4004,6 +4058,20 @@ function buildRoomPlanDrawingPage(doc, plan, pageNum, pageCount){
     doc.setFontSize(6); doc.setTextColor(...muted);
     const ly = cy < Y(plan.seat.y) ? cy-3.2 : cy+5;
     doc.text(`${m.num} ${m.id}`, cx, ly, {align:'center'});
+    // front-wall-to-marker distance — how far back from the front wall this speaker/projector
+    // actually sits, matching the same dimension already shown in the on-screen drawing
+    if(m.y > 0.15){
+      const dimMX = cx + 5;
+      doc.setDrawColor(...accent3); doc.setLineWidth(0.15);
+      doc.line(cx+2.5, Y(0), dimMX-1, Y(0));
+      doc.line(cx+2.5, cy, dimMX-1, cy);
+      doc.line(dimMX, Y(0), dimMX, cy);
+      doc.setFillColor(...accent3);
+      doc.triangle(dimMX,Y(0), dimMX-0.6,Y(0)+1.5, dimMX+0.6,Y(0)+1.5, 'F');
+      doc.triangle(dimMX,cy, dimMX-0.6,cy-1.5, dimMX+0.6,cy-1.5, 'F');
+      doc.setFontSize(5); doc.setTextColor(...accent3);
+      doc.text(fmtFt(m.y), dimMX+1.2, (Y(0)+cy)/2, {align:'center', angle:90});
+    }
   });
   pdfFooter(doc, meta);
 }
@@ -4066,6 +4134,20 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
   doc.setLineDashPattern([], 0);
   doc.setFontSize(6); doc.setTextColor(...accent3);
   doc.text('EAR LEVEL', wallX0-2, Yh(plan.earH)+1.2, {align:'right', maxWidth: 12});
+
+  if(!isFrontRear){
+    // MLP recliner, side profile — matching the on-screen drawing, only on left/right walls
+    // where depth (seat.y) is the axis this view actually shows.
+    const seatFloorH = 1.4, seatDepth = 1.7, backHeight = 3.1, backDepth = 0.55;
+    const mlpX = X(plan.seat.y);
+    const seatFrontY = floorY, seatTopY = Yh(seatFloorH);
+    const seatX0 = mlpX - seatDepth*mmPerFt*0.35, seatX1 = mlpX + seatDepth*mmPerFt*0.65;
+    doc.setDrawColor(...ink); doc.setLineWidth(0.3);
+    doc.setFillColor(...PDFX.colors.panelTint);
+    doc.rect(seatX0, seatTopY, seatX1-seatX0, seatFrontY-seatTopY, 'FD');
+    const backX0 = seatX1 - backDepth*mmPerFt, backTopY = Yh(backHeight);
+    doc.rect(backX0, backTopY, seatX1-backX0, seatFrontY-backTopY, 'FD');
+  }
 
   if(wall==='front'){
     const screenBottomH = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
@@ -4710,6 +4792,7 @@ function openItemModal(id){
     document.getElementById('miThrowRatioMax').value=it.throwRatioMax!=null?it.throwRatioMax:'';
     syncZoomRatioPreview();
     document.getElementById('miMountType').value=it.mountType||'bookshelf';
+    document.getElementById('miAlsoSurround').checked = !!it.usableAsSurround;
     document.getElementById('miAvrType').value=it.avrType||'receiver';
     document.getElementById('miRmsPower').value=it.rmsPower!=null?it.rmsPower:'';
     document.getElementById('miRmsPower2').value=it.rmsPower!=null?it.rmsPower:'';
@@ -4752,6 +4835,7 @@ function openItemModal(id){
     document.getElementById('miThrowRatioMax').value='';
     syncZoomRatioPreview();
     document.getElementById('miMountType').value='bookshelf';
+    document.getElementById('miAlsoSurround').checked = false;
     document.getElementById('miAvrType').value='receiver';
     document.getElementById('miRmsPower').value='';
     document.getElementById('miRmsPower2').value='';
@@ -4797,6 +4881,7 @@ function syncCategoryFieldsVisibility(){
     // overwriting real data the moment someone opens it to edit something unrelated.
     opt.hidden = (cat==='center' && centerRestricted.includes(opt.value) && mountSelect.value !== opt.value);
   });
+  document.getElementById('miAlsoSurroundRow').style.display = (cat==='fronts' && mountSelect.value==='inwall') ? 'block' : 'none';
   document.getElementById('miSpeakerSpecRow').style.display = MOUNT_CATS.includes(cat) ? 'flex' : 'none';
   document.getElementById('miAvrTypeRow').style.display = 'none';
   document.getElementById('miCableLengthRow').style.display = ['spkcable','avcable','netcable'].includes(cat) ? 'flex' : 'none';
@@ -4861,6 +4946,7 @@ function saveItem(){
   const resolution=cat==='projector' ? document.getElementById('miResolution').value : null;
   const lightSource=cat==='projector' ? document.getElementById('miLightSource').value : null;
   const mountType=MOUNT_CATS.includes(cat) ? document.getElementById('miMountType').value : null;
+  const usableAsSurround = (cat==='fronts' && mountType==='inwall') ? document.getElementById('miAlsoSurround').checked : false;
   const avrType=cat==='avr' ? 'receiver' : cat==='avprocessor' ? 'processor' : null;
   const cableLength=['spkcable','avcable','netcable'].includes(cat) ? (+document.getElementById('miCableLength').value||null) : null;
   const cableGauge=cat==='spkcable' ? (+document.getElementById('miCableGauge').value||null) : null;
@@ -4871,7 +4957,7 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode:'mrpDiscount',mrp:mrpVal,distributorDiscountPct,unitType};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,usableAsSurround,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode:'mrpDiscount',mrp:mrpVal,distributorDiscountPct,unitType};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
@@ -4923,9 +5009,9 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
+  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','usableassurround','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
   const catName = cid => (cats.find(c=>c.id===cid)||{}).name || cid;
-  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
+  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', i.usableAsSurround?'Yes':'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -4991,7 +5077,7 @@ function importXLSX(inp){
 
       const ix = {cat:head.indexOf('category'), brand:head.indexOf('brand'), model:head.indexOf('model'), price:head.indexOf('price'), qty:head.indexOf('qty'), channels:head.indexOf('channels'),
         screentype:head.indexOf('screentype'), at:head.indexOf('acoustictransparent'), resolution:head.indexOf('resolution'), lightsource:head.indexOf('lightsource'),
-        screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), specs:head.indexOf('specs'),
+        screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), usableassurround:head.indexOf('usableassurround'), specs:head.indexOf('specs'),
         avrtype:head.indexOf('avrtype'), alr:head.indexOf('ambientlightrejecting'), paneltype:head.indexOf('paneltype'),
         marginpct:head.indexOf('marginpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
         aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
@@ -5107,6 +5193,7 @@ function importNativeRows(rows, ix, inp){
     const lightSource = ix.lightsource>=0 && r[ix.lightsource] ? String(r[ix.lightsource]).trim() : null;
     const screenSize = ix.screensize>=0 ? (parseImportNumber(r[ix.screensize])||null) : null;
     const mountType = ix.mounttype>=0 && r[ix.mounttype] ? String(r[ix.mounttype]).trim().toLowerCase() : null;
+    const usableAsSurround = ix.usableassurround>=0 && /^y/i.test(String(r[ix.usableassurround]||'').trim());
     const specs = ix.specs>=0 && r[ix.specs] ? parseSpecsText(String(r[ix.specs]).split('|').join('\n')) : null;
     const avrType = (ix.avrtype>=0 && r[ix.avrtype]) ? String(r[ix.avrtype]).trim().toLowerCase()
       : cid==='avr' ? 'receiver' : cid==='avprocessor' ? 'processor' : null;
@@ -5146,6 +5233,7 @@ function importNativeRows(rows, ix, inp){
       if(lightSource) existing.lightSource=lightSource;
       if(screenSize!=null) existing.screenSize=screenSize;
       if(mountType) existing.mountType=mountType;
+      if(ix.usableassurround>=0) existing.usableAsSurround=usableAsSurround;
       if(specs) existing.specs=specs;
       if(avrType) existing.avrType=avrType;
       if(ix.alr>=0) existing.ambientLightRejecting=ambientLightRejecting;
@@ -5168,7 +5256,7 @@ function importNativeRows(rows, ix, inp){
       existing.unitType=unitTypeImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, usableAsSurround, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
@@ -5832,8 +5920,20 @@ function drawRoomPlan(){
     });
   }
 
-  parts.push(`<circle cx="${X(seat.x)}" cy="${Y(seat.y)}" r="9" fill="none" stroke="var(--ink)" stroke-width="1.6"/>`);
-  parts.push(`<circle cx="${X(seat.x)}" cy="${Y(seat.y)}" r="2.5" fill="var(--ink)"/>`);
+  {
+    // Recliner icon at the MLP, birds-eye view — sized to a realistic footprint (~2.3ft wide,
+    // ~3ft deep), facing the screen (toward y=0, with the backrest toward the rear of the room).
+    // Far clearer for a client to read than an abstract dot — this is a real seat, not a coordinate marker.
+    const rW = 2.3*pxPerFt, rD = 3*pxPerFt;
+    const rx0 = X(seat.x)-rW/2, ry0 = Y(seat.y)-rD*0.55;
+    parts.push(`<g>
+      <rect x="${rx0}" y="${ry0}" width="${rW}" height="${rD}" rx="${rW*0.2}" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.4"/>
+      <line x1="${rx0+rW*0.1}" y1="${ry0+rD*0.78}" x2="${rx0+rW*0.9}" y2="${ry0+rD*0.78}" stroke="var(--ink)" stroke-width="1" opacity="0.5"/>
+      <rect x="${rx0-rW*0.1}" y="${ry0+rD*0.15}" width="${rW*0.16}" height="${rD*0.55}" rx="${rW*0.06}" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1"/>
+      <rect x="${rx0+rW*0.94}" y="${ry0+rD*0.15}" width="${rW*0.16}" height="${rD*0.55}" rx="${rW*0.06}" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1"/>
+    </g>`);
+    parts.push(`<circle cx="${X(seat.x)}" cy="${Y(seat.y)}" r="2" fill="var(--ink)"/>`);
+  }
   parts.push(`<text x="${X(seat.x)}" y="${Y(seat.y)+22}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--muted)">MLP</text>`);
   // MLP-to-front-wall dimension — offset to the side of the seat marker so it never overlaps it
   const mlpDimX = X(seat.x) + (seat.x <= 0 ? 34 : -34);
@@ -6136,6 +6236,14 @@ function onRearSurroundElevInput(){
 function drawWallElevation(wall){
   const plan = computeRoomPlan();
   const { W, L, H, seat, earH, screenW, screenH } = plan;
+  // Computed early (before layout sizing) so the number of per-marker dimension rows can inform
+  // how much strip height to reserve — otherwise a wall with several markers stacks rows deep
+  // enough to collide with the title block, which sits in the same bottom strip.
+  let relevant;
+  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C'].includes(m.id) || (m.id.startsWith('SUB') && m.y < L*0.5));
+  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id));
+  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id));
+  else relevant = plan.markers.filter(m=> /^(SL|SR)[1-9]/.test(m.id) || m.id==='TRL' || m.id==='TRR');
   const frontAngleDeg = +document.getElementById('rpFrontElev').value || 0;
   const centerAngleDeg = +document.getElementById('rpCenterElev').value || 0;
   const surroundOffsetFt = +document.getElementById('rpSurroundElev').value || 0;
@@ -6151,7 +6259,10 @@ function drawWallElevation(wall){
   const axisFt = isFrontRear ? W : L;
   const pxPerFt = Math.min(46, Math.max(22, 460/Math.max(axisFt,H)));
   const leftM = 62, topM = 30, rightM = 30;
-  const bottomStripH = 148;
+  // Extra vertical room needed for the stacked per-marker dimension rows beyond the first one —
+  // each additional marker on this wall needs its own 13px row before the title block can start.
+  const extraRowsH = Math.max(0, relevant.length-1)*13;
+  const bottomStripH = 148 + extraRowsH;
   const drawW = axisFt*pxPerFt, drawH = H*pxPerFt;
   const minSheetW = 560;
   const svgW = Math.max(leftM+drawW+rightM, minSheetW);
@@ -6186,6 +6297,19 @@ function drawWallElevation(wall){
   parts.push(`<rect x="${leftM-58}" y="${yPx(earH)-8}" width="52" height="13" fill="var(--panel)"/>`);
   parts.push(`<text x="${leftM-8}" y="${yPx(earH)+2}" text-anchor="end" font-size="8.5" font-family="var(--mono)" fill="var(--cyan)">EAR LVL</text>`);
 
+  if(!isFrontRear){
+    // MLP recliner, side profile — seat, reclined backrest, headrest near ear level. Only on
+    // left/right walls, where depth (seat.y) is the axis this view actually shows; front/rear
+    // walls show width, where the MLP's real depth position can't be meaningfully placed.
+    const seatFloorH = 1.4, seatDepth = 1.7, backHeight = 3.1, backDepth = 0.55;
+    const mlpX = xPx(seat.y);
+    const seatFrontY = yPx(0), seatTopY = yPx(seatFloorH);
+    const seatX0 = mlpX - seatDepth*pxPerFt*0.35, seatX1 = mlpX + seatDepth*pxPerFt*0.65;
+    parts.push(`<rect x="${seatX0}" y="${seatTopY}" width="${seatX1-seatX0}" height="${seatFrontY-seatTopY}" rx="3" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.3"/>`);
+    const backX0 = seatX1 - backDepth*pxPerFt, backTopY = yPx(backHeight);
+    parts.push(`<rect x="${backX0}" y="${backTopY}" width="${seatX1-backX0}" height="${seatFrontY-backTopY}" rx="3" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.3"/>`);
+  }
+
   // height dimension (left side) — floor to ceiling, arrow-marker style matching the top-down plan
   const dimXL = xPx(isFrontRear?-W/2:0) - 26;
   [0, H].forEach(hf=>{
@@ -6219,12 +6343,6 @@ function drawWallElevation(wall){
     parts.push(`<rect x="${dmx-22}" y="${dmy-8}" width="44" height="14" fill="var(--panel)"/>`);
     parts.push(`<text x="${dmx}" y="${dmy+3}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--accent3)" transform="rotate(${-diagAngleDeg} ${dmx} ${dmy})">${plan.screenIn}" diag</text>`);
   }
-
-  let relevant;
-  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C'].includes(m.id) || (m.id.startsWith('SUB') && m.y < L*0.5));
-  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id));
-  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id));
-  else relevant = plan.markers.filter(m=> /^(SL|SR)[1-9]/.test(m.id) || m.id==='TRL' || m.id==='TRR');
 
   if(!relevant.length){
     parts.push(`<text x="${svgW/2}" y="${(ceilY+floorY)/2}" text-anchor="middle" font-size="11" font-family="var(--body)" fill="var(--muted)">No speakers positioned on this wall for the current system</text>`);
@@ -6290,7 +6408,7 @@ function drawWallElevation(wall){
   const clientName = (quote && quote.client && quote.client.name) || 'Untitled project';
   const settings = getSettings();
   const today = new Date().toISOString().slice(0,10);
-  const stripY = svgH - bottomStripH + 60;
+  const stripY = floorY + 60 + extraRowsH;
   const tbW = 300, tbH = bottomStripH - 74;
   const tbX = svgW-rightM-tbW, tbY = stripY-2;
   parts.push(`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="var(--panel)" stroke="var(--ink)" stroke-width="1"/>`);
