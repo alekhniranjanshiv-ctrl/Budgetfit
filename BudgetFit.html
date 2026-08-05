@@ -1102,6 +1102,13 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <div class="mrow"><label class="hint">Quote footer notes (terms, validity, taxes)</label><textarea id="coNotes" rows="4">Prices inclusive of standard installation & calibration. Taxes as applicable. Quote valid 15 days. Delivery 2–4 weeks from advance.</textarea></div>
     <button class="btn primary" onclick="saveSettings()">Save details</button>
   </div>
+  <div class="card">
+    <h2 style="display:flex;align-items:center;justify-content:space-between;padding-right:0">
+      <span>Import log</span>
+      <button class="btn sm" onclick="openImportLogModal()">View log</button>
+    </h2>
+    <p class="hint" id="importLogSummary">No imports yet — this fills in the next time you import a price list, showing exactly which rows (if any) were skipped and why.</p>
+  </div>
 </div>
 
 </div><!-- /wrap -->
@@ -1396,6 +1403,18 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <button class="btn sm" onclick="closeProfitPreview()" style="color:#111;border-color:#ccc;background:none">Close</button>
     </div>
     <div id="profitPreviewBody" style="padding:20px;max-height:75vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Import log — history of every price-list import, with per-row skip reasons so a skipped row
+     is traceable instead of just a bare count in a toast that's already gone -->
+<div class="modal-bg" id="importLogBg" onclick="if(event.target===this)closeImportLogModal()">
+  <div class="modal" style="max-width:720px;background:#fdfdfc;color:#111;padding:0;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #ddd;background:#fff">
+      <strong style="font-family:'Space Grotesk',sans-serif">Import log</strong>
+      <button class="btn sm" onclick="closeImportLogModal()" style="color:#111;border-color:#ccc;background:none">Close</button>
+    </div>
+    <div id="importLogBody" style="padding:20px;max-height:75vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -2091,6 +2110,7 @@ function showTab(t){
   if(t==='roomplan' && typeof loadRoomPlanCollapseState==='function') loadRoomPlanCollapseState();
   if(t==='roomplan' && typeof loadRoomPlanDescriptionsState==='function') loadRoomPlanDescriptionsState();
   if(t==='roomplan' && typeof loadRoomPlanScheduleVisibilityState==='function') loadRoomPlanScheduleVisibilityState();
+  if(t==='settings' && typeof syncImportLogSummary==='function') syncImportLogSummary();
   if(t==='quote' && typeof syncQuotingForSummary==='function') syncQuotingForSummary();
   if(t==='room' && typeof renderCategoryAttributesUI==='function') renderCategoryAttributesUI();
   if(t==='room' && typeof syncFurnitureCheckbox==='function') syncFurnitureCheckbox();
@@ -3518,6 +3538,20 @@ function closeProfitPreview(){
 // [{id, company, repName, repPhone, brands:[...]}] — one real-world contact per distributor,
 // covering however many brands they actually supply, instead of re-entering the same phone
 // number once per brand.
+// Import log — a persisted history of every price-list import, including WHY each skipped row
+// was skipped (not just a count). Without this, "3 skipped" tells you nothing about which 3 rows
+// or what was wrong with them, forcing a manual re-check of the whole sheet.
+let importLog = [];
+function loadImportLog(){ importLog = store.get('bf_importlog') || []; }
+function saveImportLog(){ store.set('bf_importlog', importLog); }
+function recordImportLog(fileName, added, updated, skipped, skippedDetails){
+  importLog.unshift({
+    id: 'imp'+Date.now(), timestamp: new Date().toISOString(), fileName: fileName||'(unknown file)',
+    added, updated, skipped, skippedDetails: skippedDetails||[]
+  });
+  if(importLog.length>30) importLog.length = 30; // keep recent history bounded, not unlimited
+  saveImportLog();
+}
 let distributors = [];
 let editingDistributorId = null;
 function loadDistributors(){ distributors = store.get('bf_distributors') || []; }
@@ -5009,9 +5043,9 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','usableassurround','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
+  const rows = [['category','brand','model','price','qty','marginpct','mrp','distributordiscountpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','usableassurround','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
   const catName = cid => (cats.find(c=>c.id===cid)||{}).name || cid;
-  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', i.usableAsSurround?'Yes':'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
+  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, i.mrp!=null?i.mrp:'', i.distributorDiscountPct!=null?i.distributorDiscountPct:'', (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', i.usableAsSurround?'Yes':'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -5079,7 +5113,7 @@ function importXLSX(inp){
         screentype:head.indexOf('screentype'), at:head.indexOf('acoustictransparent'), resolution:head.indexOf('resolution'), lightsource:head.indexOf('lightsource'),
         screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), usableassurround:head.indexOf('usableassurround'), specs:head.indexOf('specs'),
         avrtype:head.indexOf('avrtype'), alr:head.indexOf('ambientlightrejecting'), paneltype:head.indexOf('paneltype'),
-        marginpct:head.indexOf('marginpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
+        marginpct:head.indexOf('marginpct'), mrp:head.indexOf('mrp'), distributordiscountpct:head.indexOf('distributordiscountpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
         aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
         rmspower:head.indexOf('rmspower'), ratedimpedance:head.indexOf('ratedimpedance'), sensitivity:head.indexOf('sensitivity'),
         powerhandlingmin:head.indexOf('powerhandlingmin'), powerhandlingmax:head.indexOf('powerhandlingmax'), impedance:head.indexOf('impedance'),
@@ -5173,18 +5207,34 @@ function importNativeRows(rows, ix, inp){
   // habit of typing the old name) still resolves correctly instead of creating a stray category.
   catByName['av receiver / processor'] = catByName['av receiver / processor'] || 'avr';
   let added=0, updated=0, skipped=0;
+  const skippedDetails = [];
   for(let ri=1; ri<rows.length; ri++){
     const r = rows[ri];
+    const excelRow = ri+1; // rows[] is 0-indexed with the header at index 0, so data row ri is Excel row ri+1
     let cid = String(r[ix.cat]||'').trim().toLowerCase();
     if(!catIds.has(cid)) cid = catByName[cid] || null;
     if(!cid){
-      const raw = String(r[ix.cat]||'').trim(); if(!raw){ skipped++; continue; }
+      const raw = String(r[ix.cat]||'').trim();
+      if(!raw){ skipped++; skippedDetails.push({row:excelRow, reason:'missing category', brand:String(r[ix.brand]||'').trim(), model:String(r[ix.model]||'').trim()}); continue; }
       cid = raw.toLowerCase().replace(/[^a-z0-9]+/g,'');
       if(!catIds.has(cid)){ cats.push({id:cid,name:raw,weight:3,enabled:true}); catIds.add(cid); }
     }
-    const price = parseImportNumber(r[ix.price]);
+    // Prefer MRP + distributor discount when both are present and valid for this row — this
+    // matches exactly how the manual item form computes price/margin. Falls back to reading
+    // price/marginpct directly only when MRP columns aren't provided, since blindly treating a
+    // typed-in MRP value as if it were already your cost (then adding a markup on top of it)
+    // silently inflates the sell price above the real MRP.
+    const mrpVal = ix.mrp>=0 ? parseImportNumber(r[ix.mrp]) : NaN;
+    const discPct = ix.distributordiscountpct>=0 ? parseImportNumber(r[ix.distributordiscountpct]) : NaN;
+    const useMrpMode = !isNaN(mrpVal) && mrpVal>0 && !isNaN(discPct) && discPct>=0 && discPct<100;
+    const price = useMrpMode ? mrpVal*(1-discPct/100) : parseImportNumber(r[ix.price]);
     const brand = String(r[ix.brand]||'').trim(), model = String(r[ix.model]||'').trim();
-    if(!brand||!model||!price){ skipped++; continue; }
+    if(!brand||!model||!price){
+      skipped++;
+      const missing = [!brand&&'brand', !model&&'model', !price&&'price (missing, zero, or not a recognisable number)'].filter(Boolean).join(', ');
+      skippedDetails.push({row:excelRow, reason:`missing ${missing}`, brand, model});
+      continue;
+    }
     const qty = Math.max(1, parseImportNumber(r[ix.qty])||1);
     const channels = ix.channels>=0 ? (parseImportNumber(r[ix.channels])||null) : null;
     const screenType = ix.screentype>=0 && r[ix.screentype] ? String(r[ix.screentype]).trim().toLowerCase() : null;
@@ -5205,7 +5255,7 @@ function importNativeRows(rows, ix, inp){
     const subType = ix.subtype>=0 && r[ix.subtype] ? String(r[ix.subtype]).trim() : null;
     const subDriverSize = ix.subdriversize>=0 ? (parseImportNumber(r[ix.subdriversize])||null) : null;
     const variant = ix.variant>=0 && r[ix.variant] ? String(r[ix.variant]).trim() : null;
-    const marginPct = ix.marginpct>=0 ? (parseImportNumber(r[ix.marginpct])||0) : null;
+    const marginPct = useMrpMode ? (mrpVal/price - 1)*100 : (ix.marginpct>=0 ? (parseImportNumber(r[ix.marginpct])||0) : null);
     const taxInclusive = ix.taxinclusive>=0 && r[ix.taxinclusive] ? !/^(no|false|0|excl)/i.test(String(r[ix.taxinclusive])) : null;
     const gstRateImp = ix.gstrate>=0 && r[ix.gstrate]!=='' && r[ix.gstrate]!=null ? (parseImportNumber(r[ix.gstrate])||null) : null;
     const preoutChannelsImp = ix.preoutchannels>=0 && r[ix.preoutchannels]!=='' && r[ix.preoutchannels]!=null ? (parseImportNumber(r[ix.preoutchannels])||null) : null;
@@ -5245,6 +5295,7 @@ function importNativeRows(rows, ix, inp){
       if(subDriverSize!=null) existing.subDriverSize=subDriverSize;
       if(variant) existing.variant=variant;
       if(marginPct!=null) existing.marginPct=marginPct;
+      if(useMrpMode){ existing.price=price; existing.mrp=mrpVal; existing.distributorDiscountPct=discPct; existing.pricingMode='mrpDiscount'; }
       if(ix.taxinclusive>=0 && r[ix.taxinclusive]) existing.taxInclusive=taxInclusive;
       if(gstRateImp!=null) existing.gstRate=gstRateImp;
       if(rmsPowerImp!=null) existing.rmsPower=rmsPowerImp;
@@ -5256,14 +5307,59 @@ function importNativeRows(rows, ix, inp){
       existing.unitType=unitTypeImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, usableAsSurround, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, usableAsSurround, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp, ...(useMrpMode ? {mrp:mrpVal, distributorDiscountPct:discPct, pricingMode:'mrpDiscount'} : {})}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
   if(quote) renderQuote(); // reflect any price changes to items already on the active quote
-  toast(`${added} added, ${updated} updated`+(skipped?(', '+skipped+' skipped'):''));
+  const fileName = (inp && inp.files && inp.files[0]) ? inp.files[0].name : null;
+  recordImportLog(fileName, added, updated, skipped, skippedDetails);
+  toast(`${added} added, ${updated} updated`+(skipped?(`, ${skipped} skipped — see Settings → Import Log for details`):''));
 }
 
+function openImportLogModal(){
+  document.getElementById('importLogBody').innerHTML = renderImportLogHTML();
+  document.getElementById('importLogBg').classList.add('show');
+}
+function closeImportLogModal(){
+  document.getElementById('importLogBg').classList.remove('show');
+}
+function fmtImportLogTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'}) + ' · ' + d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+}
+function renderImportLogHTML(){
+  if(!importLog.length) return '<p class="hint">No imports logged yet.</p>';
+  return importLog.map(entry=>{
+    const hasSkips = entry.skipped>0 && entry.skippedDetails && entry.skippedDetails.length;
+    const skipRows = hasSkips ? entry.skippedDetails.map(d=>
+      `<div style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12.5px">
+        <b>Row ${d.row}</b>${d.brand||d.model?' — '+[d.brand,d.model].filter(Boolean).join(' '):''}
+        <div style="color:#a33;margin-top:2px">${d.reason}</div>
+      </div>`).join('') : '';
+    return `
+    <div style="border:1px solid #ddd;border-radius:10px;margin-bottom:12px;overflow:hidden">
+      <div style="padding:10px 14px;background:#f7f7f5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <div style="font-weight:700;font-size:13px">${entry.fileName||'(unknown file)'}</div>
+          <div class="hint" style="margin-top:2px">${fmtImportLogTime(entry.timestamp)}</div>
+        </div>
+        <div style="font-size:12.5px;text-align:right">
+          <span style="color:#2a7">${entry.added} added</span> &nbsp;·&nbsp;
+          <span style="color:#569">${entry.updated} updated</span>${entry.skipped ? ` &nbsp;·&nbsp; <span style="color:#a33;font-weight:700">${entry.skipped} skipped</span>` : ''}
+        </div>
+      </div>
+      ${hasSkips ? `<div>${skipRows}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+function syncImportLogSummary(){
+  const el = document.getElementById('importLogSummary');
+  if(!el) return;
+  if(!importLog.length) return; // leave the default "no imports yet" message
+  const latest = importLog[0];
+  el.textContent = `Last import: ${latest.fileName||'(unknown file)'} — ${latest.added} added, ${latest.updated} updated`+(latest.skipped?`, ${latest.skipped} skipped`:'')+` (${fmtImportLogTime(latest.timestamp)})`;
+}
 function openImportReview(){
   renderImportReview();
   document.getElementById('importReviewBg').classList.add('show');
@@ -5290,8 +5386,14 @@ function renderImportReview(){
 }
 function confirmImportReview(){
   let added=0, updated=0, skipped=0;
-  pendingImportRows.forEach(r=>{
-    if(!r.include || !r.cat || (!r.brand && !r.model)){ skipped++; return; }
+  const skippedDetails = [];
+  pendingImportRows.forEach((r,i)=>{
+    if(!r.include || !r.cat || (!r.brand && !r.model)){
+      skipped++;
+      const reason = !r.include ? 'unchecked (excluded by you in the review step)' : !r.cat ? 'no category selected' : 'missing both brand and model';
+      skippedDetails.push({row:i+1, reason, brand:r.brand||'', model:r.model||''});
+      return;
+    }
     const qty = Math.max(1,r.qty||1);
     const existing = findExistingItem(r.cat, r.brand, r.model);
     if(existing){ existing.price=r.price; existing.qty=qty; updated++; }
@@ -5301,7 +5403,8 @@ function confirmImportReview(){
   renderPlist(); renderWeights();
   if(quote) renderQuote(); // reflect any price changes to items already on the active quote
   closeImportReview();
-  toast(`${added} added, ${updated} updated`+(skipped?(', '+skipped+' skipped (unchecked or no category)'):''));
+  recordImportLog(null, added, updated, skipped, skippedDetails);
+  toast(`${added} added, ${updated} updated`+(skipped?(`, ${skipped} skipped — see Settings → Import Log for details`):''));
 }
 
 /* ---------------- settings ---------------- */
@@ -5498,6 +5601,12 @@ function computeRoomPlan(){
     document.getElementById('rpChannel').value = quote.channel;
     document.getElementById('rpChannelSrc').textContent = '(from quote'+(quote.htib?', HTiB':'')+')';
   } else {
+    // No quote generated yet — the 2D preview should still reflect whatever channel config the
+    // person has actually set on the Room tab, not whatever rpChannel last happened to hold from
+    // an earlier session or an entirely different quote. Without this, the drawing silently shows
+    // the wrong system with no indication anything is out of sync.
+    const setupChannelEl = document.getElementById('channelConfig');
+    if(setupChannelEl && setupChannelEl.value) document.getElementById('rpChannel').value = setupChannelEl.value;
     document.getElementById('rpChannelSrc').textContent = '(no quote yet — reference layout)';
   }
   const cfgId = document.getElementById('rpChannel').value;
@@ -6198,7 +6307,7 @@ function setRoomPlanView(view){
     document.getElementById(btnIdMap[v]).classList.toggle('on', v===view);
     document.getElementById(svgIdMap[v]).style.display = v===view ? '' : 'none';
   });
-  if(view!=='top') drawWallElevation(view);
+  if(view==='top') drawRoomPlan(); else drawWallElevation(view);
 }
 function onScreenHeightInput(){
   document.getElementById('rpScreenHeightVal').textContent = (+document.getElementById('rpScreenHeight').value).toFixed(2)+'ft';
@@ -6530,6 +6639,7 @@ renderPlist();
 loadSettingsUI();
 autoBackupIfDue();
 loadDistributors();
+loadImportLog();
 loadInstallPrefs();
 loadProjScreenPrefs();
 loadMoreFilterPrefs();
