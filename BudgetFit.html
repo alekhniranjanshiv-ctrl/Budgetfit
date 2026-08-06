@@ -1100,6 +1100,30 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <div class="mrow"><label class="hint">GSTIN (shown on quotation)</label><input id="coGstin" placeholder="27ABCDE1234F1Z5"></div>
     <div class="mrow"><label class="hint">Qualification / credentials <span class="hint" style="text-transform:none">— shown on the quotation letterhead</span></label><input id="coQualification" value="15+ years experience · Architect & Interior Designer · Specialising in Home Cinema"></div>
     <div class="mrow"><label class="hint">Quote footer notes (terms, validity, taxes)</label><textarea id="coNotes" rows="4">Prices inclusive of standard installation & calibration. Taxes as applicable. Quote valid 15 days. Delivery 2–4 weeks from advance.</textarea></div>
+    <div class="mrow"><label class="hint">Thank-you message <span class="hint" style="text-transform:none">— shown on the quotation's cover page</span></label><textarea id="coThankYou" rows="3">Thank you for considering us for your home cinema project. We're genuinely grateful for the opportunity to be part of a space where you'll spend years making memories with family and friends — every detail in this proposal has been put together with that in mind.</textarea></div>
+    <div class="mrow"><label class="hint">Terms & Conditions <span class="hint" style="text-transform:none">— shown as the quotation's last page</span></label><textarea id="coTerms" rows="8">1. This quotation is valid for the number of days stated on the cover sheet from the date of issue.
+2. A 50% advance is required to confirm the order; the balance is due on completion of installation.
+3. Delivery and installation timelines are estimates and may vary based on product availability from distributors.
+4. Prices are based on the specific brands/models listed; substitutions due to stock availability will be communicated and re-quoted if the price differs.
+5. Standard manufacturer warranty applies to all equipment; installation workmanship is warranted for 1 year from handover.
+6. Any structural, electrical, or civil work required (conduit, in-wall wiring, false ceiling) is outside this quotation unless explicitly listed.
+7. Cancellation after advance payment may be subject to a restocking or processing charge on ordered equipment.</textarea></div>
+    <div class="mrow"><label class="hint">Logo <span class="hint" style="text-transform:none">— shown on the quotation's cover page, next to your company name</span></label>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <img id="coLogoPreview" style="display:none;max-height:60px;max-width:180px;border:1px solid var(--border2);border-radius:6px;background:#fff;padding:4px">
+        <input type="file" id="coLogoFile" accept="image/png,image/jpeg,image/svg+xml" onchange="handleLogoUpload(this)" style="display:none">
+        <button class="btn sm" onclick="document.getElementById('coLogoFile').click()">Upload logo</button>
+        <button class="btn sm ghost" id="coLogoRemoveBtn" style="display:none" onclick="removeLogo()">Remove</button>
+      </div>
+    </div>
+    <div class="mrow"><label class="hint">Signature <span class="hint" style="text-transform:none">— shown above your name on the Terms & Conditions page</span></label>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <img id="coSignaturePreview" style="display:none;max-height:50px;max-width:180px;border:1px solid var(--border2);border-radius:6px;background:#fff;padding:4px">
+        <input type="file" id="coSignatureFile" accept="image/png,image/jpeg,image/svg+xml" onchange="handleSignatureUpload(this)" style="display:none">
+        <button class="btn sm" onclick="document.getElementById('coSignatureFile').click()">Upload signature</button>
+        <button class="btn sm ghost" id="coSignatureRemoveBtn" style="display:none" onclick="removeSignature()">Remove</button>
+      </div>
+    </div>
     <button class="btn primary" onclick="saveSettings()">Save details</button>
   </div>
   <div class="card">
@@ -3863,11 +3887,139 @@ function pdfFooter(doc, meta){
   if(contactBits) doc.text(contactBits, pageW/2, y, {align:'center', maxWidth: 80});
   doc.text('Confidential — for client use only', pageW-m, y, {align:'right'});
 }
-function buildQuotationPDFDoc(q){
+// Cover page — company name and sub-line in large type, a thank-you paragraph, and who this
+// specific quotation is for. Always page 1; the quotation itself starts on the page after this.
+function buildCompanyProfilePDFPage(doc, q, pageNum, pageCount, opts){
+  opts = opts || {};
+  const s = getSettings();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const ink=[32,38,43], muted=[118,127,114], accent=[124,58,31];
+  let y = pageH*0.32;
+
+  if(s.logoImage){
+    const logoW = 30, logoH = logoW*(s.logoAspect||0.4);
+    try{ doc.addImage(s.logoImage, pageW-margin-logoW, 18, logoW, logoH); }catch(e){ /* unsupported image data — skip rather than break the page */ }
+  }
+
+  doc.setDrawColor(...accent); doc.setLineWidth(1.2);
+  doc.line(margin, y-14, margin+26, y-14);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(28); doc.setTextColor(...ink);
+  const nameLines = doc.splitTextToSize(s.name||'Your Company', pageW-margin*2);
+  nameLines.forEach(line=>{ doc.text(line, margin, y); y += 11; });
+  y += 2;
+  if(s.qualification){
+    doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(...muted);
+    const qualLines = doc.splitTextToSize(s.qualification, pageW-margin*2);
+    qualLines.forEach(line=>{ doc.text(line, margin, y); y += 6; });
+  }
+  y += 16;
+
+  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW-margin, y);
+  y += 12;
+
+  const client = (q && q.client) || {};
+  const clientName = client.name || opts.clientName || '';
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...muted);
+  doc.text(opts.docLabel || 'Home Cinema Proposal', margin, y); y += 6;
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(...ink);
+  doc.text(`Prepared for ${clientName||'—'}`, margin, y); y += 7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...muted);
+  const dateStr = (q && q.date) || opts.dateStr || '';
+  doc.text(`${dateStr}${q&&q.quoteNo?'   ·   Quote # '+q.quoteNo:''}`, margin, y);
+  y += 8;
+
+  // Complete client details — phone, email, address, and room dimensions when available, not
+  // just the name, so the cover page stands on its own as a project record.
+  const clientPhone = client.phone || opts.clientPhone || '';
+  const clientEmail = client.email || opts.clientEmail || '';
+  const clientAddress = client.address || opts.clientAddress || '';
+  const roomW = client.roomWidth || opts.roomWidth, roomL = client.roomLength || opts.roomLength, roomH = client.roomHeight || opts.roomHeight;
+  const detailLines = [];
+  if(clientPhone || clientEmail) detailLines.push([clientPhone, clientEmail].filter(Boolean).join('   ·   '));
+  if(clientAddress) detailLines.push(clientAddress);
+  if(roomW && roomL) detailLines.push(`Room: ${roomW}ft × ${roomL}ft${roomH?' × '+roomH+'ft height':''}`);
+  if(detailLines.length){
+    doc.setFontSize(9.5); doc.setTextColor(...muted);
+    detailLines.forEach(line=>{ doc.text(line, margin, y); y += 5; });
+  }
+  y += 14;
+
+  if(opts.contentsList && opts.contentsList.length){
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+    doc.text('Contents', margin, y); y += 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+    opts.contentsList.forEach((item,i)=>{ doc.text(`${i+1}.  ${item}`, margin+2, y); y += 5.4; });
+    y += 8;
+  }
+
+  if(s.thankYou){
+    doc.setFont('helvetica','italic'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+    const thankLines = doc.splitTextToSize(s.thankYou, pageW-margin*2-10);
+    thankLines.forEach(line=>{ doc.text(line, margin, y); y += 5.6; });
+  }
+
+  // contact block, bottom of the page
+  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
+  doc.line(margin, pageH-32, pageW-margin, pageH-32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
+  const contactLine = [s.addr, s.phone, s.email].filter(Boolean).join('   ·   ');
+  doc.text(contactLine, margin, pageH-25);
+  if(s.gstin) doc.text('GSTIN: '+s.gstin, margin, pageH-20);
+  doc.setFontSize(8); doc.text(`Page ${pageNum} of ${pageCount}`, pageW-margin, pageH-10, {align:'right'});
+}
+// Closing page — full Terms & Conditions text, followed by a signature block. Always the last
+// page of the document, appended after the quotation and any room-plan drawings.
+function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
+  const s = getSettings();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const ink=[32,38,43], muted=[118,127,114];
+  let y = margin+6;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...ink);
+  doc.text('Terms & Conditions', margin, y);
+  y += 10;
+  doc.setDrawColor(...ink); doc.setLineWidth(0.4);
+  doc.line(margin, y, pageW-margin, y);
+  y += 10;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...ink);
+  const termsText = s.terms || '';
+  const termsLines = doc.splitTextToSize(termsText, pageW-margin*2);
+  const signatureBlockHeight = 55; // reserve room so the signature never gets pushed onto its own new page
+  termsLines.forEach(line=>{
+    if(y > pageH-margin-signatureBlockHeight){ doc.addPage(); y = margin+6; }
+    doc.text(line, margin, y);
+    y += 5.6;
+  });
+
+  y = Math.max(y+18, pageH-70);
+  if(s.signatureImage){
+    try{ doc.addImage(s.signatureImage, margin, y-16, 45, 16); }catch(e){ /* unsupported image format — fall through to the signature line only */ }
+  }
+  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
+  doc.line(margin, y+2, margin+65, y+2);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...ink);
+  doc.text(s.name||'', margin, y+8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  doc.text('Authorised signatory', margin, y+13);
+
+  doc.setFontSize(8);
+  doc.text(`Page ${pageNum} of ${pageCount}`, pageW-margin, pageH-10, {align:'right'});
+}
+function buildQuotationPDFDoc(q, totalPageCount){
   const s = getSettings();
   const T = computeQuoteTotals(q);
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const pageCount = totalPageCount || 3; // fallback for direct/manual calls without room-plan pages
+  buildCompanyProfilePDFPage(doc, q, 1, pageCount);
+  doc.addPage();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -4396,20 +4548,25 @@ function downloadQuotationPDF(){
   if(!quote){ toast('Generate a quote first'); return; }
   if(typeof window.jspdf === 'undefined'){ toast('PDF library failed to load — check your internet connection'); return; }
   const name = cf('name') ? cf('name').replace(/[^a-z0-9]+/gi,'-') : 'client';
-  const pdfDoc = buildQuotationPDFDoc(quote);
-  if(document.getElementById('includeRoomPlanPDF').checked){
+  const includeRoomPlan = document.getElementById('includeRoomPlanPDF').checked;
+  // Cover(1) + Quotation(2) [+ top-down, 4 elevations, speaker positions if room plan included] + Terms(last)
+  const totalPageCount = includeRoomPlan ? 9 : 3;
+  const pdfDoc = buildQuotationPDFDoc(quote, totalPageCount);
+  if(includeRoomPlan){
     const plan = computeRoomPlan();
     pdfDoc.addPage();
-    buildRoomPlanDrawingPage(pdfDoc, plan, 2, 7);
+    buildRoomPlanDrawingPage(pdfDoc, plan, 3, totalPageCount);
     ['front','left','right','rear'].forEach((wall,i)=>{
       pdfDoc.addPage();
-      buildWallElevationPDFPage(pdfDoc, plan, wall, 3+i, 7);
+      buildWallElevationPDFPage(pdfDoc, plan, wall, 4+i, totalPageCount);
     });
     pdfDoc.addPage();
-    buildSpeakerPositionPDFPage(pdfDoc, plan, 7, 7);
+    buildSpeakerPositionPDFPage(pdfDoc, plan, 8, totalPageCount);
   }
+  pdfDoc.addPage();
+  buildTermsConditionsPDFPage(pdfDoc, totalPageCount, totalPageCount);
   pdfDoc.save(`budgetfit-quotation-${name}-${quote.date}.pdf`);
-  toast('Quotation PDF downloaded' + (document.getElementById('includeRoomPlanPDF').checked ? ' — 7 pages: quote, top-down plan, 4 wall elevations, speaker positions' : ''));
+  toast('Quotation PDF downloaded' + (includeRoomPlan ? ' — 9 pages: cover, quote, top-down plan, 4 wall elevations, speaker positions, terms' : ' — cover, quote, terms'));
 }
 // Drawings-only report — no pricing, no line items, no letterhead totals. Works even before a
 // quote is confirmed, or with no quote at all, since the drawings only need room dimensions and
@@ -4420,17 +4577,34 @@ function downloadDrawingsReportPDF(){
   const { jsPDF } = window.jspdf;
   const pdfDoc = new jsPDF({ unit:'mm', format:'a4' });
   const plan = computeRoomPlan();
-  buildRoomPlanDrawingPage(pdfDoc, plan, 1, 6);
-  ['front','left','right','rear'].forEach((wall,i)=>{
-    pdfDoc.addPage();
-    buildWallElevationPDFPage(pdfDoc, plan, wall, 2+i, 6);
+  const totalPageCount = 8; // cover + top-down + 4 elevations + speaker positions + terms
+  const dateStr = (quote && quote.date) || new Date().toISOString().slice(0,10);
+  const getVal = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  buildCompanyProfilePDFPage(pdfDoc, quote, 1, totalPageCount, {
+    docLabel: 'Technical Drawing Set',
+    clientName: getVal('clientName'),
+    clientPhone: getVal('clientPhone'),
+    clientEmail: getVal('clientEmail'),
+    clientAddress: getVal('clientAddress'),
+    roomWidth: +getVal('clientRoomWidth')||null,
+    roomLength: +getVal('clientRoomLength')||null,
+    roomHeight: +getVal('clientRoomHeight')||null,
+    dateStr,
+    contentsList: ['Top-down room plan', 'Front wall elevation', 'Left wall elevation', 'Right wall elevation', 'Rear wall elevation', 'Speaker position schedule'],
   });
   pdfDoc.addPage();
-  buildSpeakerPositionPDFPage(pdfDoc, plan, 6, 6);
+  buildRoomPlanDrawingPage(pdfDoc, plan, 2, totalPageCount);
+  ['front','left','right','rear'].forEach((wall,i)=>{
+    pdfDoc.addPage();
+    buildWallElevationPDFPage(pdfDoc, plan, wall, 3+i, totalPageCount);
+  });
+  pdfDoc.addPage();
+  buildSpeakerPositionPDFPage(pdfDoc, plan, 7, totalPageCount);
+  pdfDoc.addPage();
+  buildTermsConditionsPDFPage(pdfDoc, totalPageCount, totalPageCount);
   const name = cf('name') ? cf('name').replace(/[^a-z0-9]+/gi,'-') : 'client';
-  const dateStr = (quote && quote.date) || new Date().toISOString().slice(0,10);
   pdfDoc.save(`budgetfit-drawings-${name}-${dateStr}.pdf`);
-  toast('Drawings report downloaded — 6 pages, no pricing');
+  toast('Drawings report downloaded — 8 pages: cover, plan, elevations, positions, terms — no pricing');
 }
 
 // Ensures categories/items referenced by a snapshot's lines exist locally (matching by cat+brand+model,
@@ -5416,7 +5590,11 @@ function getSettings(){
     addr:document.getElementById('coAddr').value,
     gstin:document.getElementById('coGstin').value,
     qualification:document.getElementById('coQualification').value,
-    notes:document.getElementById('coNotes').value
+    notes:document.getElementById('coNotes').value,
+    thankYou:document.getElementById('coThankYou').value,
+    terms:document.getElementById('coTerms').value,
+    signatureImage:null,
+    logoImage:null
   };
 }
 function saveSettings(){
@@ -5427,10 +5605,108 @@ function saveSettings(){
     addr:document.getElementById('coAddr').value,
     gstin:document.getElementById('coGstin').value,
     qualification:document.getElementById('coQualification').value,
-    notes:document.getElementById('coNotes').value
+    notes:document.getElementById('coNotes').value,
+    thankYou:document.getElementById('coThankYou').value,
+    terms:document.getElementById('coTerms').value,
+    signatureImage:(settings&&settings.signatureImage)||null,
+    signatureAspect:(settings&&settings.signatureAspect)||0.4,
+    logoImage:(settings&&settings.logoImage)||null,
+    logoAspect:(settings&&settings.logoAspect)||0.4
   };
   store.set('bf_settings',settings);
   toast('Company details saved');
+}
+// jsPDF's addImage() only accepts raster formats (PNG/JPEG), not vector SVG. For an SVG upload,
+// this loads it into an off-screen <img>, draws it onto a canvas at a fixed print-quality width,
+// and exports that as a PNG data URL — the SVG's own transparency is preserved, since neither the
+// canvas nor the resulting PNG start with a background fill. PNG/JPEG uploads pass through as-is.
+// Either way, the callback also receives the image's aspect ratio (height/width), captured here
+// once so the PDF-building code can size it proportionally later without distorting it.
+function rasterizeImageFile(file, callback){
+  const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name||'');
+  const reader = new FileReader();
+  reader.onload = e => {
+    if(!isSvg){
+      const probe = new Image();
+      probe.onload = () => callback(e.target.result, probe.naturalWidth ? probe.naturalHeight/probe.naturalWidth : 0.4);
+      probe.onerror = () => callback(e.target.result, 0.4);
+      probe.src = e.target.result;
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const targetW = 500;
+      const aspect = (img.naturalWidth && img.naturalHeight) ? (img.naturalHeight/img.naturalWidth) : 0.4;
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW; canvas.height = Math.max(1, Math.round(targetW*aspect));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      callback(canvas.toDataURL('image/png'), aspect);
+    };
+    img.onerror = () => toast('Could not read that SVG file');
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function handleSignatureUpload(inp){
+  const file = inp.files && inp.files[0];
+  if(!file) return;
+  rasterizeImageFile(file, (dataUrl, aspect) => {
+    settings = settings || getSettings();
+    settings.signatureImage = dataUrl;
+    settings.signatureAspect = aspect;
+    store.set('bf_settings', settings);
+    syncSignaturePreview();
+    toast('Signature saved');
+  });
+}
+function removeSignature(){
+  if(!settings) return;
+  settings.signatureImage = null;
+  store.set('bf_settings', settings);
+  syncSignaturePreview();
+}
+function syncSignaturePreview(){
+  const img = document.getElementById('coSignaturePreview');
+  const removeBtn = document.getElementById('coSignatureRemoveBtn');
+  if(!img) return;
+  if(settings && settings.signatureImage){
+    img.src = settings.signatureImage; img.style.display = '';
+    if(removeBtn) removeBtn.style.display = '';
+  } else {
+    img.style.display = 'none';
+    if(removeBtn) removeBtn.style.display = 'none';
+  }
+}
+function handleLogoUpload(inp){
+  const file = inp.files && inp.files[0];
+  if(!file) return;
+  rasterizeImageFile(file, (dataUrl, aspect) => {
+    settings = settings || getSettings();
+    settings.logoImage = dataUrl;
+    settings.logoAspect = aspect;
+    store.set('bf_settings', settings);
+    syncLogoPreview();
+    toast('Logo saved');
+  });
+}
+function removeLogo(){
+  if(!settings) return;
+  settings.logoImage = null;
+  store.set('bf_settings', settings);
+  syncLogoPreview();
+}
+function syncLogoPreview(){
+  const img = document.getElementById('coLogoPreview');
+  const removeBtn = document.getElementById('coLogoRemoveBtn');
+  if(!img) return;
+  if(settings && settings.logoImage){
+    img.src = settings.logoImage; img.style.display = '';
+    if(removeBtn) removeBtn.style.display = '';
+  } else {
+    img.style.display = 'none';
+    if(removeBtn) removeBtn.style.display = 'none';
+  }
 }
 function loadSettingsUI(){
   if(!settings) return;
@@ -5441,6 +5717,10 @@ function loadSettingsUI(){
   document.getElementById('coGstin').value=settings.gstin||'';
   document.getElementById('coQualification').value=settings.qualification!=null?settings.qualification:'15+ years experience · Architect & Interior Designer · Specialising in Home Cinema';
   document.getElementById('coNotes').value=settings.notes||'';
+  if(settings.thankYou!=null) document.getElementById('coThankYou').value=settings.thankYou;
+  if(settings.terms!=null) document.getElementById('coTerms').value=settings.terms;
+  syncSignaturePreview();
+  syncLogoPreview();
 }
 
 /* ================= ROOM PLAN ENGINE =================
