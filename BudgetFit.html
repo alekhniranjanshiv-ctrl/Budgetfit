@@ -694,6 +694,49 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
     <div class="row" style="margin-top:10px">
       <div class="field" style="min-width:180px"><label>Email</label><input id="clientEmail" type="email" placeholder="client@example.com"></div>
       <div class="field" style="min-width:180px"><label>Site / address</label><input id="clientAddress" placeholder="e.g. Dharampeth, Nagpur"></div>
+      <div class="field" style="min-width:180px"><label>Place of Supply <span class="hint" style="text-transform:none">— for GST, shown on the quotation</span></label>
+        <select id="clientState">
+          <option value="01-JAMMU AND KASHMIR">01-JAMMU AND KASHMIR</option>
+          <option value="02-HIMACHAL PRADESH">02-HIMACHAL PRADESH</option>
+          <option value="03-PUNJAB">03-PUNJAB</option>
+          <option value="04-CHANDIGARH">04-CHANDIGARH</option>
+          <option value="05-UTTARAKHAND">05-UTTARAKHAND</option>
+          <option value="06-HARYANA">06-HARYANA</option>
+          <option value="07-DELHI">07-DELHI</option>
+          <option value="08-RAJASTHAN">08-RAJASTHAN</option>
+          <option value="09-UTTAR PRADESH">09-UTTAR PRADESH</option>
+          <option value="10-BIHAR">10-BIHAR</option>
+          <option value="11-SIKKIM">11-SIKKIM</option>
+          <option value="12-ARUNACHAL PRADESH">12-ARUNACHAL PRADESH</option>
+          <option value="13-NAGALAND">13-NAGALAND</option>
+          <option value="14-MANIPUR">14-MANIPUR</option>
+          <option value="15-MIZORAM">15-MIZORAM</option>
+          <option value="16-TRIPURA">16-TRIPURA</option>
+          <option value="17-MEGHALAYA">17-MEGHALAYA</option>
+          <option value="18-ASSAM">18-ASSAM</option>
+          <option value="19-WEST BENGAL">19-WEST BENGAL</option>
+          <option value="20-JHARKHAND">20-JHARKHAND</option>
+          <option value="21-ODISHA">21-ODISHA</option>
+          <option value="22-CHATTISGARH">22-CHATTISGARH</option>
+          <option value="23-MADHYA PRADESH">23-MADHYA PRADESH</option>
+          <option value="24-GUJARAT">24-GUJARAT</option>
+          <option value="25-DAMAN AND DIU">25-DAMAN AND DIU</option>
+          <option value="26-DADRA AND NAGAR HAVELI">26-DADRA AND NAGAR HAVELI</option>
+          <option value="27-MAHARASHTRA" selected>27-MAHARASHTRA</option>
+          <option value="28-ANDHRA PRADESH (OLD)">28-ANDHRA PRADESH (OLD)</option>
+          <option value="29-KARNATAKA">29-KARNATAKA</option>
+          <option value="30-GOA">30-GOA</option>
+          <option value="31-LAKSHADWEEP">31-LAKSHADWEEP</option>
+          <option value="32-KERALA">32-KERALA</option>
+          <option value="33-TAMIL NADU">33-TAMIL NADU</option>
+          <option value="34-PUDUCHERRY">34-PUDUCHERRY</option>
+          <option value="35-ANDAMAN AND NICOBAR ISLANDS">35-ANDAMAN AND NICOBAR ISLANDS</option>
+          <option value="36-TELANGANA">36-TELANGANA</option>
+          <option value="37-ANDHRA PRADESH (NEW)">37-ANDHRA PRADESH (NEW)</option>
+          <option value="38-LADAKH">38-LADAKH</option>
+          <option value="97-OTHER TERRITORY">97-OTHER TERRITORY</option>
+        </select>
+      </div>
     </div>
     <label class="hint" style="display:block;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.4px;font-size:11px">Room dimensions</label>
     <div class="row">
@@ -1296,6 +1339,10 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="miAlsoSurround" style="width:auto">
           <span class="hint" style="text-transform:none">This in-wall model can also be used as Surround speakers <span class="hint" style="text-transform:none">— many in-wall lines use the same enclosure for L/C/R and surround duty (unlike a dedicated MTM centre), so the same product becomes a candidate for both categories</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
+          <input type="checkbox" id="miAlsoCenter" style="width:auto">
+          <span class="hint" style="text-transform:none">This in-wall model can also be used as Centre channel <span class="hint" style="text-transform:none">— for true LCR in-wall lines where the same enclosure covers L/C/R identically, unlike a dedicated MTM centre design</span></span>
         </label>
       </div>
       <div class="row" id="miSpeakerSpecRow" style="display:none">
@@ -2792,6 +2839,15 @@ function catItemsForSpeaker(catId){
     const borrowedFromFronts = items.filter(it => it.cat==='fronts' && it.usableAsSurround);
     if(borrowedFromFronts.length) all = all.concat(borrowedFromFronts);
   }
+  if(catId==='center'){
+    // Same idea, for genuine single-model LCR in-wall lines where the same enclosure is identical
+    // across left, centre, and right — unlike a dedicated MTM centre design with a different
+    // driver layout. Only in-wall Front L/R items can carry this flag (see the item form), which
+    // also means these borrowed candidates automatically respect the centre's own mount-type
+    // restriction (in-wall is already an allowed centre mount) without any extra filtering here.
+    const borrowedFromFronts = items.filter(it => it.cat==='fronts' && it.usableAsCenter);
+    if(borrowedFromFronts.length) all = all.concat(borrowedFromFronts);
+  }
   if(!MOUNT_CATS.includes(catId)) return all;
   const pref = moreFilterPrefs[catId+'Mount'];
   if(!pref) return all;
@@ -2892,11 +2948,13 @@ function allocateEquipment(budget, ch, maxDisc, lockedSel, htibMode, subCount, q
 }
 
 function readClientFromUI(){
+  const stateEl = document.getElementById('clientState');
   return {
     name: document.getElementById('clientName').value.trim(),
     phone: document.getElementById('clientPhone').value.trim(),
     email: document.getElementById('clientEmail').value.trim(),
     address: document.getElementById('clientAddress').value.trim(),
+    state: stateEl ? stateEl.value : '',
     roomWidth: +document.getElementById('clientRoomWidth').value || 14,
     roomLength: +document.getElementById('clientRoomLength').value || 20,
     roomHeight: +document.getElementById('clientRoomHeight').value || 10,
@@ -2915,6 +2973,7 @@ function startNewQuote(){
     document.getElementById('clientPhone').value = '';
     document.getElementById('clientEmail').value = '';
     document.getElementById('clientAddress').value = '';
+    if(document.getElementById('clientState')) document.getElementById('clientState').value = '27-MAHARASHTRA';
     document.getElementById('clientRoomWidth').value = 14;
     document.getElementById('clientRoomLength').value = 20;
     document.getElementById('clientRoomHeight').value = 10;
@@ -3141,6 +3200,7 @@ function renderQuote(){
   document.getElementById('clientPhone').value = cf('phone') || document.getElementById('clientPhone').value;
   document.getElementById('clientEmail').value = cf('email') || document.getElementById('clientEmail').value;
   document.getElementById('clientAddress').value = cf('address') || document.getElementById('clientAddress').value;
+  if(document.getElementById('clientState')) document.getElementById('clientState').value = cf('state') || document.getElementById('clientState').value;
   document.getElementById('clientRoomWidth').value = cf('roomWidth') || document.getElementById('clientRoomWidth').value;
   document.getElementById('clientRoomLength').value = cf('roomLength') || document.getElementById('clientRoomLength').value;
   document.getElementById('clientRoomHeight').value = cf('roomHeight') || document.getElementById('clientRoomHeight').value;
@@ -3941,7 +4001,7 @@ function buildCompanyProfilePDFPage(doc, q, pageNum, pageCount, opts){
   const detailLines = [];
   if(clientPhone || clientEmail) detailLines.push([clientPhone, clientEmail].filter(Boolean).join('   ·   '));
   if(clientAddress) detailLines.push(clientAddress);
-  if(roomW && roomL) detailLines.push(`Room: ${roomW}ft × ${roomL}ft${roomH?' × '+roomH+'ft height':''}`);
+  if(roomW && roomL) detailLines.push(`Room: ${roomW}ft × ${roomL}ft${roomH?' × '+roomH+'ft height':''}${q&&q.channel?'   ·   System: '+q.channel:''}`);
   if(detailLines.length){
     doc.setFontSize(9.5); doc.setTextColor(...muted);
     detailLines.forEach(line=>{ doc.text(line, margin, y); y += 5; });
@@ -3963,12 +4023,16 @@ function buildCompanyProfilePDFPage(doc, q, pageNum, pageCount, opts){
   }
 
   // contact block, bottom of the page
-  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
-  doc.line(margin, pageH-32, pageW-margin, pageH-32);
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
   const contactLine = [s.addr, s.phone, s.email].filter(Boolean).join('   ·   ');
-  doc.text(contactLine, margin, pageH-25);
-  if(s.gstin) doc.text('GSTIN: '+s.gstin, margin, pageH-20);
+  const contactLines = doc.splitTextToSize(contactLine, pageW-2*margin);
+  const contactBlockH = contactLines.length*4.4 + (s.gstin?5:0);
+  const contactTop = pageH-25-contactBlockH+4.4;
+  doc.setDrawColor(...ink); doc.setLineWidth(0.3);
+  doc.line(margin, contactTop-7, pageW-margin, contactTop-7);
+  let cty = contactTop;
+  contactLines.forEach(line=>{ doc.text(line, margin, cty); cty += 4.4; });
+  if(s.gstin) doc.text('GSTIN: '+s.gstin, margin, cty+0.6);
   doc.setFontSize(8); doc.text(`Page ${pageNum} of ${pageCount}`, pageW-margin, pageH-10, {align:'right'});
 }
 // Closing page — full Terms & Conditions text, followed by a signature block. Always the last
@@ -4012,6 +4076,134 @@ function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
   doc.setFontSize(8);
   doc.text(`Page ${pageNum} of ${pageCount}`, pageW-margin, pageH-10, {align:'right'});
 }
+// Shared invoice-style header — used by both the priced quotation and the (unpriced) drawings
+// report, via docTypeLabel/refLabel so each shows the right document type and reference field
+// name. Returns the y-position after the header so the caller knows where to continue drawing.
+function buildInvoiceStyleHeader(doc, q, opts){
+  opts = opts || {};
+  const s = getSettings();
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  let y = margin;
+  const ink=[32,38,43], muted=[118,127,114];
+  const blue = [0.145, 0.388, 0.847];
+  const spaced = (str, gap=' ') => str.split(' ').map(w=>w.split('').join(gap)).join('   ');
+
+  function fitText(text, maxW){
+    text = String(text||'');
+    if(doc.getTextWidth(text) <= maxW) return text;
+    let t = text;
+    while(t.length > 1 && doc.getTextWidth(t+'…') > maxW){ t = t.slice(0,-1); }
+    return t+'…';
+  }
+
+  // Document type label + copy designation
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
+  doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+  doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
+  y += 10;
+
+  // Company name
+  doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(...ink);
+  doc.text(fitText((s.name||'').toUpperCase(), pageW-2*margin), margin, y);
+  y += 6.5;
+
+  // GSTIN
+  if(s.gstin){
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...ink);
+    doc.text('GSTIN ', margin, y);
+    doc.text(s.gstin, margin+doc.getTextWidth('GSTIN ')+1, y);
+    y += 5.5;
+  }
+
+  // Address — wrapped, dark ink (matching the reference, not muted)
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...ink);
+  if(s.addr){
+    const addrLines = doc.splitTextToSize(s.addr, pageW-2*margin);
+    addrLines.forEach(line=>{ doc.text(line, margin, y); y += 4.6; });
+  }
+
+  // Mobile + Email — bold labels, wrapped if the combined line would otherwise run off the page
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...ink);
+  const mobileEmailW = (s.phone?doc.getTextWidth('Mobile '+s.phone+'    '):0) + (s.email?doc.getTextWidth('Email '+s.email):0);
+  const sameLine = mobileEmailW <= pageW-2*margin;
+  let mx = margin;
+  if(s.phone){
+    doc.text('Mobile ', mx, y); mx += doc.getTextWidth('Mobile ');
+    doc.setFont('helvetica','normal'); doc.text(s.phone, mx, y); mx += doc.getTextWidth(s.phone);
+    if(sameLine){ mx += doc.getTextWidth('    '); } else { y += 4.6; mx = margin; }
+    doc.setFont('helvetica','bold');
+  }
+  if(s.email){
+    doc.text('Email ', mx, y); mx += doc.getTextWidth('Email ');
+    doc.setFont('helvetica','normal'); doc.text(s.email, mx, y);
+  }
+  y += 8;
+
+  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW-margin, y);
+  y += 7;
+
+  // Reference #, Date, Validity — three-column row with an actual computed validity date.
+  // validityDays of exactly 0 is a deliberate value (valid same-day only) and must be respected,
+  // not silently replaced by the 15-day default — a bare `||` would do exactly that since 0 is falsy.
+  const validityDays = q.validityDays!=null ? q.validityDays : 15;
+  let dateStr = '', validityDateStr = '';
+  if(q.date){
+    const qd = new Date(q.date);
+    if(!isNaN(qd)) dateStr = qd.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    const vd = new Date(q.date); vd.setDate(vd.getDate()+validityDays);
+    if(!isNaN(vd)) validityDateStr = vd.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  const colW3 = (pageW-2*margin)/3;
+  const rowFields = [
+    [(opts.refLabel||'Quotation #')+': ', q.quoteNo||'—'],
+    ['Date: ', dateStr||q.date||''],
+    ['Validity: ', validityDateStr||`${validityDays} days`],
+  ];
+  rowFields.forEach(([label,val],i)=>{
+    const rx = margin + i*colW3;
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+    doc.text(label, rx, y);
+    doc.setFont('helvetica','bold'); doc.setTextColor(...ink);
+    doc.text(val, rx+doc.getTextWidth(label), y);
+  });
+  y += 9;
+
+  // Customer Details — stacked label + bold name
+  const client = q.client || {};
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  doc.text('Customer Details:', margin, y);
+  y += 5.5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+  doc.text(client.name||'—', margin, y);
+  y += 8;
+
+  // Place of Supply — stacked label + bold state
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  doc.text('Place of Supply:', margin, y);
+  y += 5.5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+  doc.text((client.state||'—').toUpperCase(), margin, y);
+  y += 8;
+
+  // Channel configuration — quick project reference, useful on both document types
+  if(q.channel){
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+    doc.text('Channel configuration: ', margin, y);
+    doc.setFont('helvetica','bold'); doc.setTextColor(...ink);
+    doc.text(q.channel, margin+doc.getTextWidth('Channel configuration: '), y);
+    y += 8;
+  } else {
+    y += 1;
+  }
+
+  doc.setDrawColor(...ink); doc.setLineWidth(0.6);
+  doc.line(margin, y, pageW-margin, y);
+  y += 7;
+  return y;
+}
 function buildQuotationPDFDoc(q, totalPageCount){
   const s = getSettings();
   const T = computeQuoteTotals(q);
@@ -4023,7 +4215,6 @@ function buildQuotationPDFDoc(q, totalPageCount){
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 15;
-  let y = margin;
   const ink=[32,38,43], muted=[118,127,114];
 
   function fitText(text, maxW){
@@ -4043,30 +4234,7 @@ function buildQuotationPDFDoc(q, totalPageCount){
     { key:'amount', label:'Amount',       x:pageW-margin, align:'right' },
   ];
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...ink);
-  doc.text(fitText(s.name, 130), margin, y+4);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
-  doc.text(s.addr||'', margin, y+10);
-  if(s.gstin) doc.text('GSTIN: '+s.gstin, margin, y+14.5);
-  doc.text(s.phone||'', pageW-margin, y+4, {align:'right'});
-  doc.text(s.email||'', pageW-margin, y+9, {align:'right'});
-  y += s.gstin ? 20 : 16;
-  doc.setDrawColor(...ink); doc.setLineWidth(0.6);
-  doc.line(margin, y, pageW-margin, y);
-  y += 7;
-
-  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
-  doc.text(`Quotation for: ${(q.client&&q.client.name)||'-'}`, margin, y);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  const qno = q.quoteNo ? `Quote #: ${q.quoteNo}   ` : '';
-  doc.text(`${qno}Date: ${q.date||''}`, pageW-margin, y, {align:'right'});
-  y += 6;
-  const client = q.client || {};
-  const contact = [client.phone, client.email].filter(Boolean).join('   ·   ');
-  doc.setFontSize(9); doc.setTextColor(...muted);
-  doc.text([contact, client.address].filter(Boolean).join('   ·   '), margin, y);
-  doc.text(`Channel: ${q.channel||''}   Valid: ${q.validityDays||15} days`, pageW-margin, y, {align:'right'});
-  y += 8;
+  let y = buildInvoiceStyleHeader(doc, q, {docTypeLabel:'QUOTATION', refLabel:'Quotation #'});
 
   function tableHeader(){
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...ink);
@@ -4577,7 +4745,7 @@ function downloadDrawingsReportPDF(){
   const { jsPDF } = window.jspdf;
   const pdfDoc = new jsPDF({ unit:'mm', format:'a4' });
   const plan = computeRoomPlan();
-  const totalPageCount = 8; // cover + top-down + 4 elevations + speaker positions + terms
+  const totalPageCount = 9; // cover + reference page + top-down + 4 elevations + speaker positions + terms
   const dateStr = (quote && quote.date) || new Date().toISOString().slice(0,10);
   const getVal = id => { const el = document.getElementById(id); return el ? el.value : ''; };
   buildCompanyProfilePDFPage(pdfDoc, quote, 1, totalPageCount, {
@@ -4593,18 +4761,28 @@ function downloadDrawingsReportPDF(){
     contentsList: ['Top-down room plan', 'Front wall elevation', 'Left wall elevation', 'Right wall elevation', 'Rear wall elevation', 'Speaker position schedule'],
   });
   pdfDoc.addPage();
-  buildRoomPlanDrawingPage(pdfDoc, plan, 2, totalPageCount);
+  // Reference page — same header style as the priced quotation, but framed as a design report
+  // with no pricing relevance: DESIGN REPORT instead of QUOTATION, Reference # instead of
+  // Quotation #. Falls back to the room-setup form fields when no quote has been generated yet,
+  // same as the cover page already does.
+  const headerQ = quote || {
+    date: dateStr, channel: getVal('channelConfig'), quoteNo: null, validityDays: 15,
+    client: { name: getVal('clientName'), state: getVal('clientState') },
+  };
+  buildInvoiceStyleHeader(pdfDoc, headerQ, {docTypeLabel:'DESIGN REPORT', refLabel:'Reference #'});
+  pdfDoc.addPage();
+  buildRoomPlanDrawingPage(pdfDoc, plan, 3, totalPageCount);
   ['front','left','right','rear'].forEach((wall,i)=>{
     pdfDoc.addPage();
-    buildWallElevationPDFPage(pdfDoc, plan, wall, 3+i, totalPageCount);
+    buildWallElevationPDFPage(pdfDoc, plan, wall, 4+i, totalPageCount);
   });
   pdfDoc.addPage();
-  buildSpeakerPositionPDFPage(pdfDoc, plan, 7, totalPageCount);
+  buildSpeakerPositionPDFPage(pdfDoc, plan, 8, totalPageCount);
   pdfDoc.addPage();
   buildTermsConditionsPDFPage(pdfDoc, totalPageCount, totalPageCount);
   const name = cf('name') ? cf('name').replace(/[^a-z0-9]+/gi,'-') : 'client';
   pdfDoc.save(`budgetfit-drawings-${name}-${dateStr}.pdf`);
-  toast('Drawings report downloaded — 8 pages: cover, plan, elevations, positions, terms — no pricing');
+  toast('Drawings report downloaded — 9 pages: cover, reference, plan, elevations, positions, terms — no pricing');
 }
 
 // Ensures categories/items referenced by a snapshot's lines exist locally (matching by cat+brand+model,
@@ -4650,6 +4828,7 @@ function loadQuoteIntoUI(q){
   document.getElementById('clientPhone').value = cf('phone');
   document.getElementById('clientEmail').value = cf('email');
   document.getElementById('clientAddress').value = cf('address');
+  if(document.getElementById('clientState')) document.getElementById('clientState').value = cf('state') || document.getElementById('clientState').value;
   document.getElementById('clientRoomWidth').value = cf('roomWidth') || 14;
   document.getElementById('clientRoomLength').value = cf('roomLength') || 20;
   document.getElementById('clientRoomHeight').value = cf('roomHeight') || 10;
@@ -5001,6 +5180,7 @@ function openItemModal(id){
     syncZoomRatioPreview();
     document.getElementById('miMountType').value=it.mountType||'bookshelf';
     document.getElementById('miAlsoSurround').checked = !!it.usableAsSurround;
+    document.getElementById('miAlsoCenter').checked = !!it.usableAsCenter;
     document.getElementById('miAvrType').value=it.avrType||'receiver';
     document.getElementById('miRmsPower').value=it.rmsPower!=null?it.rmsPower:'';
     document.getElementById('miRmsPower2').value=it.rmsPower!=null?it.rmsPower:'';
@@ -5044,6 +5224,7 @@ function openItemModal(id){
     syncZoomRatioPreview();
     document.getElementById('miMountType').value='bookshelf';
     document.getElementById('miAlsoSurround').checked = false;
+    document.getElementById('miAlsoCenter').checked = false;
     document.getElementById('miAvrType').value='receiver';
     document.getElementById('miRmsPower').value='';
     document.getElementById('miRmsPower2').value='';
@@ -5155,6 +5336,7 @@ function saveItem(){
   const lightSource=cat==='projector' ? document.getElementById('miLightSource').value : null;
   const mountType=MOUNT_CATS.includes(cat) ? document.getElementById('miMountType').value : null;
   const usableAsSurround = (cat==='fronts' && mountType==='inwall') ? document.getElementById('miAlsoSurround').checked : false;
+  const usableAsCenter = (cat==='fronts' && mountType==='inwall') ? document.getElementById('miAlsoCenter').checked : false;
   const avrType=cat==='avr' ? 'receiver' : cat==='avprocessor' ? 'processor' : null;
   const cableLength=['spkcable','avcable','netcable'].includes(cat) ? (+document.getElementById('miCableLength').value||null) : null;
   const cableGauge=cat==='spkcable' ? (+document.getElementById('miCableGauge').value||null) : null;
@@ -5165,7 +5347,7 @@ function saveItem(){
   const variant=!NO_VARIANT_FIELD_CATS.includes(cat) ? (document.getElementById('miVariant').value.trim()||null) : null;
   const specs=parseSpecsText(document.getElementById('miSpecs').value);
   if(!brand||!model||!price){ toast('Brand, model and price are required'); return; }
-  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,usableAsSurround,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode:'mrpDiscount',mrp:mrpVal,distributorDiscountPct,unitType};
+  const extra = {cat,brand,model,price,qty,marginPct,taxInclusive,gstRate,channels,preoutChannels,aspectRatio,throwRatioMin,throwRatioMax,screenType,acousticTransparent,ambientLightRejecting,screenSize,resolution,lightSource,mountType,usableAsSurround,usableAsCenter,avrType,cableLength,cableGauge,hdmiLength,hdmiSpec,subType,subDriverSize,variant,specs,rmsPower,ratedImpedance,sensitivity,powerHandlingMin,powerHandlingMax,impedance,pricingMode:'mrpDiscount',mrp:mrpVal,distributorDiscountPct,unitType};
   if(editingId){
     const it=items.find(i=>i.id===editingId);
     Object.assign(it,extra);
@@ -5217,9 +5399,9 @@ function clearPriceList(){
 /* ---------------- CSV ---------------- */
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ toast('Excel library failed to load — check your internet connection'); return; }
-  const rows = [['category','brand','model','price','qty','marginpct','mrp','distributordiscountpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','usableassurround','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
+  const rows = [['category','brand','model','price','qty','marginpct','mrp','distributordiscountpct','taxinclusive','gstrate','channels','preoutchannels','aspectratio','throwratiomin','throwratiomax','screentype','acoustictransparent','resolution','lightsource','screensize','mounttype','usableassurround','usableascenter','specs','avrtype','ambientlightrejecting','cablelength','cablegauge','hdmilength','hdmispec','subtype','subdriversize','variant','rmspower','ratedimpedance','sensitivity','powerhandlingmin','powerhandlingmax','impedance','unittype']];
   const catName = cid => (cats.find(c=>c.id===cid)||{}).name || cid;
-  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, i.mrp!=null?i.mrp:'', i.distributorDiscountPct!=null?i.distributorDiscountPct:'', (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', i.usableAsSurround?'Yes':'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
+  items.forEach(i=> rows.push([catName(i.cat), i.brand, i.model, i.price, i.qty, i.marginPct||0, i.mrp!=null?i.mrp:'', i.distributorDiscountPct!=null?i.distributorDiscountPct:'', (i.taxInclusive!==false)?'Yes':'No', i.gstRate!=null?i.gstRate:'', i.channels||'', i.preoutChannels||'', i.aspectRatio||'', i.throwRatioMin!=null?i.throwRatioMin:'', i.throwRatioMax!=null?i.throwRatioMax:'', i.screenType||'', i.acousticTransparent?'Yes':'', i.resolution||'', i.lightSource||'', i.screenSize||'', i.mountType||'', i.usableAsSurround?'Yes':'', i.usableAsCenter?'Yes':'', (i.specs||[]).map(s=>s.value?`${s.label}: ${s.value}`:s.label).join(' | '), i.avrType||'', i.ambientLightRejecting?'Yes':'', i.cableLength||'', i.cableGauge||'', i.hdmiLength||'', i.hdmiSpec||'', i.subType||'', i.subDriverSize||'', i.variant||'', i.rmsPower!=null?i.rmsPower:'', i.ratedImpedance!=null?i.ratedImpedance:'', i.sensitivity!=null?i.sensitivity:'', i.powerHandlingMin!=null?i.powerHandlingMin:'', i.powerHandlingMax!=null?i.powerHandlingMax:'', i.impedance!=null?i.impedance:'', i.unitType||'each']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Price List');
@@ -5285,7 +5467,7 @@ function importXLSX(inp){
 
       const ix = {cat:head.indexOf('category'), brand:head.indexOf('brand'), model:head.indexOf('model'), price:head.indexOf('price'), qty:head.indexOf('qty'), channels:head.indexOf('channels'),
         screentype:head.indexOf('screentype'), at:head.indexOf('acoustictransparent'), resolution:head.indexOf('resolution'), lightsource:head.indexOf('lightsource'),
-        screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), usableassurround:head.indexOf('usableassurround'), specs:head.indexOf('specs'),
+        screensize:head.indexOf('screensize'), mounttype:head.indexOf('mounttype'), usableassurround:head.indexOf('usableassurround'), usableascenter:head.indexOf('usableascenter'), specs:head.indexOf('specs'),
         avrtype:head.indexOf('avrtype'), alr:head.indexOf('ambientlightrejecting'), paneltype:head.indexOf('paneltype'),
         marginpct:head.indexOf('marginpct'), mrp:head.indexOf('mrp'), distributordiscountpct:head.indexOf('distributordiscountpct'), taxinclusive:head.indexOf('taxinclusive'), gstrate:head.indexOf('gstrate'), preoutchannels:head.indexOf('preoutchannels'),
         aspectratio:head.indexOf('aspectratio'), throwratiomin:head.indexOf('throwratiomin'), throwratiomax:head.indexOf('throwratiomax'),
@@ -5418,6 +5600,7 @@ function importNativeRows(rows, ix, inp){
     const screenSize = ix.screensize>=0 ? (parseImportNumber(r[ix.screensize])||null) : null;
     const mountType = ix.mounttype>=0 && r[ix.mounttype] ? String(r[ix.mounttype]).trim().toLowerCase() : null;
     const usableAsSurround = ix.usableassurround>=0 && /^y/i.test(String(r[ix.usableassurround]||'').trim());
+    const usableAsCenter = ix.usableascenter>=0 && /^y/i.test(String(r[ix.usableascenter]||'').trim());
     const specs = ix.specs>=0 && r[ix.specs] ? parseSpecsText(String(r[ix.specs]).split('|').join('\n')) : null;
     const avrType = (ix.avrtype>=0 && r[ix.avrtype]) ? String(r[ix.avrtype]).trim().toLowerCase()
       : cid==='avr' ? 'receiver' : cid==='avprocessor' ? 'processor' : null;
@@ -5458,6 +5641,7 @@ function importNativeRows(rows, ix, inp){
       if(screenSize!=null) existing.screenSize=screenSize;
       if(mountType) existing.mountType=mountType;
       if(ix.usableassurround>=0) existing.usableAsSurround=usableAsSurround;
+      if(ix.usableascenter>=0) existing.usableAsCenter=usableAsCenter;
       if(specs) existing.specs=specs;
       if(avrType) existing.avrType=avrType;
       if(ix.alr>=0) existing.ambientLightRejecting=ambientLightRejecting;
@@ -5481,7 +5665,7 @@ function importNativeRows(rows, ix, inp){
       existing.unitType=unitTypeImp;
       updated++;
     }
-    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, usableAsSurround, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp, ...(useMrpMode ? {mrp:mrpVal, distributorDiscountPct:discPct, pricingMode:'mrpDiscount'} : {})}); added++; }
+    else{ items.push({id:nid(), cat:cid, brand, model, price, qty, channels, preoutChannels:preoutChannelsImp, aspectRatio:aspectRatioImp, throwRatioMin:throwRatioMinImp, throwRatioMax:throwRatioMaxImp, screenType, acousticTransparent, resolution, lightSource, screenSize, mountType, usableAsSurround, usableAsCenter, specs:specs||[], avrType, ambientLightRejecting, cableLength, cableGauge, hdmiLength, hdmiSpec, subType, subDriverSize, variant, marginPct:marginPct||0, taxInclusive: taxInclusive!==null ? taxInclusive : true, gstRate: gstRateImp, rmsPower:rmsPowerImp, ratedImpedance:ratedImpedanceImp, sensitivity:sensitivityImp, powerHandlingMin:powerHandlingMinImp, powerHandlingMax:powerHandlingMaxImp, impedance:impedanceImp, unitType:unitTypeImp, ...(useMrpMode ? {mrp:mrpVal, distributorDiscountPct:discPct, pricingMode:'mrpDiscount'} : {})}); added++; }
   }
   store.set('bf_items',items); store.set('bf_cats',cats);
   renderPlist(); renderWeights();
