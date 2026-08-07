@@ -2828,26 +2828,31 @@ const MOUNT_FILTER_OPTS = [['','Any'],['floorstanding','Floor standing'],['books
 const CENTER_MOUNT_FILTER_OPTS = [['','Any'],['bookshelf','Bookshelf'],['satellite','Satellite'],['inwall','In-wall']];
 // Falls back to the full brand-filtered list if nothing in the catalog matches this exact mount
 // type, same graceful-degrade pattern as every other preference filter in the app.
+// Front L/R in-wall models explicitly flagged as also valid for another speaker role. Kept in one
+// place so the auto-allocator and the manual model dropdown can't drift apart — previously only
+// the allocator knew about these, so the checkbox appeared to do nothing when picking by hand.
+function borrowedSpeakerItems(catId){
+  if(catId==='surrounds') return items.filter(it => it.cat==='fronts' && it.usableAsSurround);
+  if(catId==='center') return items.filter(it => it.cat==='fronts' && it.usableAsCenter);
+  return [];
+}
+// Everything a person could legitimately choose for this category by hand: the category's own
+// items plus any borrowed ones. Deliberately skips the brand/mount preference filtering that
+// catItemsForSpeaker applies — those preferences steer what the allocator auto-picks, but should
+// never hide an option from someone deliberately browsing the list themselves.
+function catItemsSelectable(catId){
+  const borrowed = borrowedSpeakerItems(catId);
+  if(!borrowed.length) return catItems(catId);
+  return catItems(catId).concat(borrowed).sort((a,b)=>eff(a)-eff(b));
+}
 function catItemsForSpeaker(catId){
   let all = catItemsPref(catId);
-  if(catId==='surrounds'){
-    // Some in-wall Front L/R models are also valid for surround duty — same enclosure/drivers as
-    // the front pair, unlike a dedicated MTM centre design, so the same physical product can
-    // legitimately serve either role. A checkbox on the item (Front L/R, in-wall only) flags this,
-    // letting the allocator treat it as a real surround candidate instead of needing a duplicate
-    // catalog entry for what's actually the same speaker.
-    const borrowedFromFronts = items.filter(it => it.cat==='fronts' && it.usableAsSurround);
-    if(borrowedFromFronts.length) all = all.concat(borrowedFromFronts);
-  }
-  if(catId==='center'){
-    // Same idea, for genuine single-model LCR in-wall lines where the same enclosure is identical
-    // across left, centre, and right — unlike a dedicated MTM centre design with a different
-    // driver layout. Only in-wall Front L/R items can carry this flag (see the item form), which
-    // also means these borrowed candidates automatically respect the centre's own mount-type
-    // restriction (in-wall is already an allowed centre mount) without any extra filtering here.
-    const borrowedFromFronts = items.filter(it => it.cat==='fronts' && it.usableAsCenter);
-    if(borrowedFromFronts.length) all = all.concat(borrowedFromFronts);
-  }
+  // Same enclosure/drivers as the front pair (unlike a dedicated MTM centre design), so the same
+  // physical product can legitimately serve either role without a duplicate catalog entry. Only
+  // in-wall Front L/R items can carry these flags (see the item form), which also means borrowed
+  // candidates already respect the centre's own mount-type restriction without extra filtering.
+  const borrowed = borrowedSpeakerItems(catId);
+  if(borrowed.length) all = all.concat(borrowed);
   if(!MOUNT_CATS.includes(catId)) return all;
   const pref = moreFilterPrefs[catId+'Mount'];
   if(!pref) return all;
@@ -2894,7 +2899,7 @@ function allocateEquipment(budget, ch, maxDisc, lockedSel, htibMode, subCount, q
   };
   const effCost = it => eff(it) * effMult(it.cat);
   const qCtx = { htib: htibMode };
-  const active = cats.filter(c=>c.enabled && catItems(c.id).length>0 && catAllowed(c.id,qCtx,ch) && multFor(c.id,ch,htibMode,subCount)>0);
+  const active = cats.filter(c=>c.enabled && catItemsSelectable(c.id).length>0 && catAllowed(c.id,qCtx,ch) && multFor(c.id,ch,htibMode,subCount)>0);
   const optsFor = cid => {
     if(cid==='avr') return catItemsForAvr(ch);
     if(cid==='avprocessor') return catItemsForAvprocessor(ch);
@@ -3002,7 +3007,7 @@ function generate(){
   if(budgetInput<=0){ toast('Enter a budget first'); return; }
   const ch = currentChannel();
   const htibMode = document.getElementById('systemType').value === 'htib';
-  const active = cats.filter(c=>c.enabled && catItems(c.id).length>0 && catAllowed(c.id,{htib:htibMode}) && multFor(c.id,ch,htibMode,subCount)>0);
+  const active = cats.filter(c=>c.enabled && catItemsSelectable(c.id).length>0 && catAllowed(c.id,{htib:htibMode}) && multFor(c.id,ch,htibMode,subCount)>0);
   if(!active.length){ toast('No categories with items for this selection'); return; }
 
   const equipTarget = equipmentTargetFor(budgetInput, installPct, installMin);
@@ -3221,7 +3226,7 @@ function renderQuote(){
   syncSubCountUI(subCount);
   quote.qtyOverrides = quote.qtyOverrides || {};
   cats.filter(c=>c.enabled && quote.selections[c.id] && catAllowed(c.id,quote) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
-    const opts=catItems(c.id);
+    const opts=catItemsSelectable(c.id);
     const it=items.find(i=>i.id===quote.selections[c.id]);
     if(!it) return;
     const baseMult = multFor(c.id, ch, htibMode, subCount);
@@ -5580,10 +5585,18 @@ function importNativeRows(rows, ix, inp){
     // price/marginpct directly only when MRP columns aren't provided, since blindly treating a
     // typed-in MRP value as if it were already your cost (then adding a markup on top of it)
     // silently inflates the sell price above the real MRP.
-    const mrpVal = ix.mrp>=0 ? parseImportNumber(r[ix.mrp]) : NaN;
+    const rawPrice = parseImportNumber(r[ix.price]);
+    const mrpCol = ix.mrp>=0 ? parseImportNumber(r[ix.mrp]) : NaN;
     const discPct = ix.distributordiscountpct>=0 ? parseImportNumber(r[ix.distributordiscountpct]) : NaN;
-    const useMrpMode = !isNaN(mrpVal) && mrpVal>0 && !isNaN(discPct) && discPct>=0 && discPct<100;
-    const price = useMrpMode ? mrpVal*(1-discPct/100) : parseImportNumber(r[ix.price]);
+    // A distributor discount describes what YOU pay, never what the client pays: the sell price
+    // stays at MRP and the discount only lowers your cost, which is what the internal profit
+    // summary reports on. Use an explicit `mrp` column when present, otherwise treat the price
+    // column as the MRP — a sheet carrying a discount but no separate MRP column used to fall
+    // through to legacy price+markup handling, which added the discount ON TOP of the MRP.
+    const hasDisc = !isNaN(discPct) && discPct>=0 && discPct<100;
+    const mrpVal = (!isNaN(mrpCol) && mrpCol>0) ? mrpCol : rawPrice;
+    const useMrpMode = hasDisc && !isNaN(mrpVal) && mrpVal>0;
+    const price = useMrpMode ? mrpVal*(1-discPct/100) : rawPrice;
     const brand = String(r[ix.brand]||'').trim(), model = String(r[ix.model]||'').trim();
     if(!brand||!model||!price){
       skipped++;
