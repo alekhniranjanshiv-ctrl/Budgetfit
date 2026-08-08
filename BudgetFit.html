@@ -1754,6 +1754,35 @@ function cf(field){ return (quote && quote.client && quote.client[field]) || '';
 // this for the final bill, and generate() uses the SAME function to size the installation fee
 // correctly, instead of the allocator's raw pre-tax figure which doesn't know about exclusive
 // items needing GST added on top.
+// Each/pair-pricing-adjusted base multiplier — see effectiveMultForItem below for the full
+// rationale. Split out separately so callers that need to know "is this category's count
+// naturally 1 before any manual override" (e.g. whether to show a +/- stepper) can check the
+// adjusted base directly, not just the final post-override multiplier.
+function adjustedBaseMult(catId, it, ch, htibMode, subCount){
+  let baseMult = multFor(catId, ch, htibMode, subCount);
+  const unitType = it.unitType || 'each';
+  if(it.mountType==='inwall' && unitType==='each' && (catId==='fronts' || catId==='surrounds' || catId==='atmos')){
+    baseMult = baseMult * 2;
+  }
+  return baseMult;
+}
+// Effective quantity multiplier for a specific selected item — starts from the category's base
+// multiplier (multFor) and manual-override logic (identical everywhere pricing is computed), then
+// applies the each-vs-pair pricing adjustment: in-wall speakers are commonly sold "each" rather
+// than as a matched pair, unlike floorstanding/bookshelf/in-ceiling which are almost always priced
+// per pair. Fronts, Surrounds, and Atmos (surroundMult/atmosMult are both counts of PAIRS needed,
+// confirmed directly from the CHANNELS data) all assume pair-pricing by default, so an each-priced
+// in-wall item in any of these three categories needs the multiplier doubled to correctly cost
+// both individual units instead of just one. Deliberately scoped to mountType==='inwall' only —
+// not applied to other mount types — since unitType defaults to 'each' on virtually every existing
+// catalog item with this field never previously affecting pricing at all; applying this
+// universally would silently double the price of every existing bookshelf/floorstanding/in-ceiling
+// speaker already in the catalog.
+function effectiveMultForItem(catId, it, ch, htibMode, subCount, qtyOverrides){
+  const overrides = qtyOverrides || {};
+  const baseMult = adjustedBaseMult(catId, it, ch, htibMode, subCount);
+  return (baseMult===1 && catId!=='sub' && overrides[catId]!=null) ? overrides[catId] : baseMult;
+}
 function computeEquipmentTotals(sel, ch, htibMode, subCount, gstRate, qtyOverrides){
   const overrides = qtyOverrides || {};
   let equipTotal=0, equipTaxable=0, equipGst=0;
@@ -1761,8 +1790,7 @@ function computeEquipmentTotals(sel, ch, htibMode, subCount, gstRate, qtyOverrid
   cats.filter(c=>c.enabled && sel[c.id] && catAllowed(c.id,{selections:sel,htib:htibMode},ch) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
     const it = items.find(i=>i.id===sel[c.id]);
     if(!it) return;
-    const baseMult = multFor(c.id,ch,htibMode,subCount);
-    const mult = baseMult===1 && c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
+    const mult = effectiveMultForItem(c.id, it, ch, htibMode, subCount, overrides);
     const sellSubtotal = eff(it) * mult;
     const inclusive = it.taxInclusive !== false;
     const lineGstRate = it.gstRate!=null ? it.gstRate : gstRate;
@@ -2890,14 +2918,11 @@ function allocateEquipment(budget, ch, maxDisc, lockedSel, htibMode, subCount, q
   htibMode = !!htibMode;
   subCount = Math.max(1, subCount||1);
   qtyOverrides = qtyOverrides || {};
-  // Same override-aware mult logic used everywhere else pricing gets computed (computeEquipmentTotals,
-  // computeProfitBreakdown) — a category only respects a manual override when its own auto-computed
-  // count is 1 and it isn't the subwoofer (which has its own dedicated count control).
-  const effMult = catId => {
-    const base = multFor(catId, ch, htibMode, subCount);
-    return (base===1 && catId!=='sub' && qtyOverrides[catId]!=null) ? qtyOverrides[catId] : base;
-  };
-  const effCost = it => eff(it) * effMult(it.cat);
+  // Same override-aware, each/pair-pricing-aware mult logic used everywhere else pricing gets
+  // computed (computeEquipmentTotals) — critical that this matches exactly, since the allocator's
+  // budget-fit decisions must be based on the same effective cost the final quote will charge.
+  const effMult = (catId, it) => effectiveMultForItem(catId, it, ch, htibMode, subCount, qtyOverrides);
+  const effCost = it => eff(it) * effMult(it.cat, it);
   const qCtx = { htib: htibMode };
   const active = cats.filter(c=>c.enabled && catItemsSelectable(c.id).length>0 && catAllowed(c.id,qCtx,ch) && multFor(c.id,ch,htibMode,subCount)>0);
   const optsFor = cid => {
@@ -3229,7 +3254,7 @@ function renderQuote(){
     const opts=catItemsSelectable(c.id);
     const it=items.find(i=>i.id===quote.selections[c.id]);
     if(!it) return;
-    const baseMult = multFor(c.id, ch, htibMode, subCount);
+    const baseMult = adjustedBaseMult(c.id, it, ch, htibMode, subCount);
     // Manual override only applies where the system isn't already deriving the count from the
     // channel config (surrounds/atmos) or its own dedicated control (subwoofer has the count
     // slider elsewhere) — everywhere else, the person ordering the system knows better than a
@@ -3525,8 +3550,7 @@ function computeProfitBreakdown(q){
   cats.filter(c=>c.enabled && q.selections[c.id] && catAllowed(c.id,q,ch) && multFor(c.id,ch,htibMode,subCount)>0).forEach(c=>{
     const it = items.find(i=>i.id===q.selections[c.id]);
     if(!it) return;
-    const baseMult = multFor(c.id,ch,htibMode,subCount);
-    const mult = baseMult===1 && c.id!=='sub' && overrides[c.id]!=null ? overrides[c.id] : baseMult;
+    const mult = effectiveMultForItem(c.id, it, ch, htibMode, subCount, overrides);
     const rawLineCost = it.price * (it.qty||1) * mult; // raw dealer cost, margin excluded on purpose
     costOfGoods += rawLineCost;
     // GST you already paid your distributor when buying this item — same rate and inclusive/
@@ -4067,6 +4091,15 @@ function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
     y += 5.6;
   });
 
+  // Thank-you note — previously on the cover page, which was removed to save space. Reads
+  // naturally here as a closing remark just above the signature.
+  if(s.thankYou){
+    y = Math.max(y+10, pageH-96);
+    doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+    const thankLines = doc.splitTextToSize(s.thankYou, pageW-margin*2-10);
+    thankLines.forEach(line=>{ doc.text(line, margin, y); y += 5.2; });
+  }
+
   y = Math.max(y+18, pageH-70);
   if(s.signatureImage){
     try{ doc.addImage(s.signatureImage, margin, y-16, 45, 16); }catch(e){ /* unsupported image format — fall through to the signature line only */ }
@@ -4102,12 +4135,32 @@ function buildInvoiceStyleHeader(doc, q, opts){
     return t+'…';
   }
 
-  // Document type label + copy designation
-  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
-  doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
-  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-  doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
-  y += 10;
+  // Logo — left side, top of the page. The document-type label and company name flow below it.
+  if(s.logoImage){
+    const logoW = 26, logoH = logoW*(s.logoAspect||0.4);
+    try{
+      doc.addImage(s.logoImage, margin, y-2, logoW, logoH);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+      doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
+      y = y - 2 + logoH + 5;
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
+      doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
+      y += 10;
+    }catch(e){
+      // Unsupported image data — fall back to the no-logo layout rather than breaking the page
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
+      doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+      doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
+      y += 10;
+    }
+  } else {
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
+    doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+    doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
+    y += 10;
+  }
 
   // Company name
   doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(...ink);
@@ -4215,8 +4268,6 @@ function buildQuotationPDFDoc(q, totalPageCount){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
   const pageCount = totalPageCount || 3; // fallback for direct/manual calls without room-plan pages
-  buildCompanyProfilePDFPage(doc, q, 1, pageCount);
-  doc.addPage();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -4717,14 +4768,119 @@ function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
   pdfFooter(doc, meta);
 }
 
+// Product specification sheet — what's in the system, in plain terms, with NO pricing. Quantity,
+// product name, and its specs/description only. Sits after the quotation so a client (or their
+// architect) can read what's actually being installed without the commercial figures in the way.
+function buildProductSpecsPDFPage(doc, q, pageNum, pageCount){
+  const T = computeQuoteTotals(q);
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const ink=[32,38,43], muted=[118,127,114];
+  let y = margin+4;
+
+  function pageBreakIfNeeded(needed){
+    if(y + needed > pageH - margin - 12){
+      doc.addPage();
+      y = margin+4;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...muted);
+      doc.text('PRODUCT SPECIFICATIONS (CONTINUED)', margin, y);
+      y += 7;
+      doc.setDrawColor(...ink); doc.setLineWidth(0.4);
+      doc.line(margin, y, pageW-margin, y);
+      y += 7;
+    }
+  }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink);
+  doc.text('Product Specifications', margin, y);
+  y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
+  doc.text('Detailed description of every item included in this proposal. Refer to the quotation for commercial terms.', margin, y);
+  y += 7;
+  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW-margin, y);
+  y += 8;
+
+  let n = 0;
+  T.lines.forEach(line=>{
+    const qty = (line.catalogQty||1)*(line.mult||1);
+    const specs = (line.specs||[]).filter(sp=>sp && (sp.label || sp.value));
+    const specLines = specs.map(sp => sp.value ? `${sp.label}: ${sp.value}` : String(sp.label));
+    // estimate the height this entry needs so it isn't split awkwardly across a page break
+    const estH = 13 + specLines.length*4.4 + 4;
+    pageBreakIfNeeded(estH);
+
+    n++;
+    // Category label
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(...muted);
+    doc.text((line.catName||'').toUpperCase(), margin+7, y);
+    y += 4.6;
+
+    // Number, product name, quantity
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+    doc.text(`${n}.`, margin, y);
+    const nameMaxW = pageW - margin*2 - 7 - 22;
+    const nameLines = doc.splitTextToSize(`${line.brand||''} ${line.model||''}`.trim(), nameMaxW);
+    nameLines.forEach((ln,i)=>{ doc.text(ln, margin+7, y + i*5); });
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...ink);
+    doc.text(`Qty ${qty}`, pageW-margin, y, {align:'right'});
+    y += nameLines.length*5 + 1.5;
+
+    // Specs / description
+    if(specLines.length){
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.8); doc.setTextColor(...muted);
+      specLines.forEach(sp=>{
+        const wrapped = doc.splitTextToSize('•  '+sp, pageW - margin*2 - 9);
+        wrapped.forEach(wl=>{
+          pageBreakIfNeeded(6);
+          doc.text(wl, margin+7, y);
+          y += 4.4;
+        });
+      });
+    } else {
+      doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+      doc.text('Specifications available on request.', margin+7, y);
+      y += 4.4;
+    }
+
+    y += 3;
+    doc.setDrawColor(220,220,216); doc.setLineWidth(0.3);
+    doc.line(margin, y, pageW-margin, y);
+    y += 5.5;
+  });
+
+  // Services, if any — listed by description and quantity, still with no rates
+  if(T.serviceLines && T.serviceLines.length){
+    pageBreakIfNeeded(20);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+    doc.text('Services Included', margin, y);
+    y += 6.5;
+    T.serviceLines.forEach(sl=>{
+      pageBreakIfNeeded(7);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...ink);
+      doc.text(`•  ${sl.desc}`, margin+7, y);
+      doc.setFont('helvetica','bold');
+      doc.text(`Qty ${sl.qty}`, pageW-margin, y, {align:'right'});
+      y += 5.2;
+    });
+  }
+
+  doc.setFontSize(8); doc.setTextColor(...muted);
+  doc.text(`Page ${pageNum} of ${pageCount}`, pageW-margin, pageH-10, {align:'right'});
+}
+
 function downloadQuotationPDF(){
   if(!quote){ toast('Generate a quote first'); return; }
   if(typeof window.jspdf === 'undefined'){ toast('PDF library failed to load — check your internet connection'); return; }
   const name = cf('name') ? cf('name').replace(/[^a-z0-9]+/gi,'-') : 'client';
   const includeRoomPlan = document.getElementById('includeRoomPlanPDF').checked;
-  // Cover(1) + Quotation(2) [+ top-down, 4 elevations, speaker positions if room plan included] + Terms(last)
+  // Quotation(1, header now on page 1) + Specs(2) [+ top-down, 4 elevations, speaker positions
+  // if room plan included] + Terms(last)
   const totalPageCount = includeRoomPlan ? 9 : 3;
   const pdfDoc = buildQuotationPDFDoc(quote, totalPageCount);
+  pdfDoc.addPage();
+  buildProductSpecsPDFPage(pdfDoc, quote, 2, totalPageCount);
   if(includeRoomPlan){
     const plan = computeRoomPlan();
     pdfDoc.addPage();
@@ -4739,7 +4895,7 @@ function downloadQuotationPDF(){
   pdfDoc.addPage();
   buildTermsConditionsPDFPage(pdfDoc, totalPageCount, totalPageCount);
   pdfDoc.save(`budgetfit-quotation-${name}-${quote.date}.pdf`);
-  toast('Quotation PDF downloaded' + (includeRoomPlan ? ' — 9 pages: cover, quote, top-down plan, 4 wall elevations, speaker positions, terms' : ' — cover, quote, terms'));
+  toast('Quotation PDF downloaded' + (includeRoomPlan ? ' — quote, specs, top-down plan, 4 wall elevations, speaker positions, terms' : ' — quote, specs, terms'));
 }
 // Drawings-only report — no pricing, no line items, no letterhead totals. Works even before a
 // quote is confirmed, or with no quote at all, since the drawings only need room dimensions and
@@ -5587,12 +5743,19 @@ function importNativeRows(rows, ix, inp){
     // silently inflates the sell price above the real MRP.
     const rawPrice = parseImportNumber(r[ix.price]);
     const mrpCol = ix.mrp>=0 ? parseImportNumber(r[ix.mrp]) : NaN;
-    const discPct = ix.distributordiscountpct>=0 ? parseImportNumber(r[ix.distributordiscountpct]) : NaN;
     // A distributor discount describes what YOU pay, never what the client pays: the sell price
     // stays at MRP and the discount only lowers your cost, which is what the internal profit
     // summary reports on. Use an explicit `mrp` column when present, otherwise treat the price
     // column as the MRP — a sheet carrying a discount but no separate MRP column used to fall
     // through to legacy price+markup handling, which added the discount ON TOP of the MRP.
+    // The discount value itself is read from a dedicated `distributordiscountpct` column when
+    // present; otherwise it falls back to `marginpct`, since this app's pricing is exclusively
+    // MRP + distributor discount everywhere else (the manual item form has no separate raw
+    // cost+markup entry mode at all) — so a sheet using the older price/marginpct column pair is
+    // always meant the same way, not as a literal cost+markup pair.
+    const rawDiscPct = ix.distributordiscountpct>=0 ? parseImportNumber(r[ix.distributordiscountpct]) : NaN;
+    const marginColPct = ix.marginpct>=0 ? parseImportNumber(r[ix.marginpct]) : NaN;
+    const discPct = !isNaN(rawDiscPct) ? rawDiscPct : marginColPct;
     const hasDisc = !isNaN(discPct) && discPct>=0 && discPct<100;
     const mrpVal = (!isNaN(mrpCol) && mrpCol>0) ? mrpCol : rawPrice;
     const useMrpMode = hasDisc && !isNaN(mrpVal) && mrpVal>0;
@@ -6196,7 +6359,7 @@ function computeRoomPlan(){
   const survRouteMode = survMount.routeMode || (surroundRoutePref==='ceiling' ? 'conduit' : 'direct');
   Object.assign(survMount, {routeMode: survRouteMode});
   const survLine = lineFor('surrounds');
-  const survPairs = useQuote ? (survLine ? Math.max(1,Math.round(survLine.mult||1)) : 0)
+  const survPairs = useQuote ? (survLine ? multFor('surrounds', getChannel(cfgId), htibMode, 1) : 0)
                               : rpChannelParts(cfgId).survPairs;
   // Genuine side (p=0) and rear (p=1) surround pairs only — a 3rd pair (9-channel configs) is
   // Dolby's Front Wide position, not another rear-style surround, and gets built separately below.
@@ -6226,7 +6389,7 @@ function computeRoomPlan(){
   const atmosLine = lineFor('atmos');
   const atmosItem = useQuote ? items.find(i=>i.id===quote.selections.atmos) : null;
   const atmosCeilingMounted = !atmosItem || !atmosItem.mountType || atmosItem.mountType==='inceiling';
-  const atmosPairs = useQuote ? (atmosLine ? Math.max(1,Math.round(atmosLine.mult||1)) : 0)
+  const atmosPairs = useQuote ? (atmosLine ? multFor('atmos', getChannel(cfgId), htibMode, 1) : 0)
                                : rpChannelParts(cfgId).atmosPairs;
   const atmosDrop = H - earH;
   const atmosOffRaw = atmosDrop / Math.tan(ang.atmosElev*Math.PI/180);
