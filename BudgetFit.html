@@ -940,7 +940,7 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
           <span>0.5ft</span><span>Screen bottom height off floor <b id="rpScreenHeightVal"></b></span><span>4ft</span>
         </div>
         <input id="rpScreenHeight" type="range" min="0.5" max="4" step="0.25" value="2" oninput="onScreenHeightInput()" style="width:100%" aria-label="Screen bottom edge height off the floor">
-        <p class="hint rp-desc-text" style="margin-top:3px">Standard seated-viewing height is around 2ft — adjust for a raised platform, acoustically transparent screen, or a specific mounting plan.</p>
+        <p class="hint rp-desc-text" style="margin-top:3px">With a projector in the system, this is auto-calculated from its mount height and image size (image sits directly below a level, fixed-lens projector) — drag to override. For a flat-panel or no projector, standard seated-viewing height is around 2ft.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
@@ -962,6 +962,13 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
         </div>
         <input id="rpFrontWideElev" type="range" min="0" max="15" step="1" value="0" oninput="onFrontWideElevInput()" style="width:100%" aria-label="Front wide speaker vertical elevation above ear level">
         <p class="hint rp-desc-text" style="margin-top:3px">Only applies to 9-channel systems (9.1.2/9.1.4) — Dolby's front wide pair, positioned wider than L/R, independent of the other elevation controls.</p>
+      </div>
+      <div style="margin-top:10px" id="rpProjectorDropRow">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+          <span>Flush</span><span>Projector drop-down pole <b id="rpProjectorDropVal"></b></span><span>3ft</span>
+        </div>
+        <input id="rpProjectorDrop" type="range" min="0" max="3" step="0.25" value="0" oninput="onProjectorDropInput()" style="width:100%" aria-label="Projector drop distance below the ceiling on a mounting pole">
+        <p class="hint rp-desc-text" style="margin-top:3px">How far the projector hangs below the ceiling on a mounting pole — 0 is a flush ceiling mount. Affects the mount bracket length and throw line on the side wall views.</p>
       </div>
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
@@ -1338,11 +1345,11 @@ table.ps td.r,table.ps th.r{text-align:right;font-family:var(--mono)}
       <div class="mrow" id="miAlsoSurroundRow" style="display:none">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="miAlsoSurround" style="width:auto">
-          <span class="hint" style="text-transform:none">This in-wall model can also be used as Surround speakers <span class="hint" style="text-transform:none">— many in-wall lines use the same enclosure for L/C/R and surround duty (unlike a dedicated MTM centre), so the same product becomes a candidate for both categories</span></span>
+          <span class="hint" style="text-transform:none">This model can also be used as Surround speakers <span class="hint" style="text-transform:none">— many in-wall and bookshelf lines use the same enclosure for L/C/R and surround duty (unlike a dedicated MTM centre), so the same product becomes a candidate for both categories</span></span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
           <input type="checkbox" id="miAlsoCenter" style="width:auto">
-          <span class="hint" style="text-transform:none">This in-wall model can also be used as Centre channel <span class="hint" style="text-transform:none">— for true LCR in-wall lines where the same enclosure covers L/C/R identically, unlike a dedicated MTM centre design</span></span>
+          <span class="hint" style="text-transform:none">This model can also be used as Centre channel <span class="hint" style="text-transform:none">— for true LCR in-wall or bookshelf lines where the same enclosure covers L/C/R identically, unlike a dedicated MTM centre design</span></span>
         </label>
       </div>
       <div class="row" id="miSpeakerSpecRow" style="display:none">
@@ -1761,23 +1768,24 @@ function cf(field){ return (quote && quote.client && quote.client[field]) || '';
 function adjustedBaseMult(catId, it, ch, htibMode, subCount){
   let baseMult = multFor(catId, ch, htibMode, subCount);
   const unitType = it.unitType || 'each';
-  if(it.mountType==='inwall' && unitType==='each' && (catId==='fronts' || catId==='surrounds' || catId==='atmos')){
+  if((it.mountType==='inwall'||it.mountType==='bookshelf') && unitType==='each' && (catId==='fronts' || catId==='surrounds' || catId==='atmos')){
     baseMult = baseMult * 2;
   }
   return baseMult;
 }
 // Effective quantity multiplier for a specific selected item — starts from the category's base
 // multiplier (multFor) and manual-override logic (identical everywhere pricing is computed), then
-// applies the each-vs-pair pricing adjustment: in-wall speakers are commonly sold "each" rather
-// than as a matched pair, unlike floorstanding/bookshelf/in-ceiling which are almost always priced
-// per pair. Fronts, Surrounds, and Atmos (surroundMult/atmosMult are both counts of PAIRS needed,
-// confirmed directly from the CHANNELS data) all assume pair-pricing by default, so an each-priced
-// in-wall item in any of these three categories needs the multiplier doubled to correctly cost
-// both individual units instead of just one. Deliberately scoped to mountType==='inwall' only —
-// not applied to other mount types — since unitType defaults to 'each' on virtually every existing
-// catalog item with this field never previously affecting pricing at all; applying this
-// universally would silently double the price of every existing bookshelf/floorstanding/in-ceiling
-// speaker already in the catalog.
+// applies the each-vs-pair pricing adjustment: in-wall and bookshelf speakers are both commonly
+// sold "each" rather than as a matched pair (e.g. MK Sound bookshelf lines), unlike floorstanding/
+// in-ceiling which are almost always priced per pair — this matches the "Sold as" field already
+// on the item form. Fronts, Surrounds, and Atmos (surroundMult/atmosMult are both counts of PAIRS
+// needed, confirmed directly from the CHANNELS data) all assume pair-pricing by default, so an
+// each-priced in-wall/bookshelf item in any of these three categories needs the multiplier doubled
+// to correctly cost both individual units instead of just one. IMPORTANT: unitType defaults to
+// 'each' on every item regardless of mount type, and this field never affected pricing before —
+// so any EXISTING bookshelf item still sitting at that unexamined default will now also get
+// doubled here. Worth auditing existing bookshelf catalog entries and setting "Sold as: Pair" on
+// any item that's genuinely pair-priced, to avoid an unintended price change on the next quote.
 function effectiveMultForItem(catId, it, ch, htibMode, subCount, qtyOverrides){
   const overrides = qtyOverrides || {};
   const baseMult = adjustedBaseMult(catId, it, ch, htibMode, subCount);
@@ -1917,6 +1925,7 @@ const NO_VARIANT_FIELD_CATS = ['avr','avprocessor','poweramp','screen','projecto
 const MOUNT_CATS = ['fronts','center','surrounds','atmos']; // speaker categories that support mount-type selection — Atmos included since it's sometimes run off a bookshelf speaker instead of a true in-ceiling unit
 const ARCHITECTURAL_MOUNTS = ['inwall','inceiling']; // built into the wall/ceiling — everything else (floorstanding/bookshelf/satellite, or legacy 'standmount' data) counts as a standard, visible speaker
 const MOUNT_LABELS = {floorstanding:'floor standing', bookshelf:'bookshelf', satellite:'satellite', inwall:'in-wall', inceiling:'in-ceiling', standmount:'standmount / floor'};
+const UNIT_TYPE_LABELS = {each:'Each', pair:'Pair', set:'Set', kit:'Kit'};
 let items = store.get('bf_items');
 if(!items){ items = SAMPLE_ITEMS.map(mkItem); store.set('bf_items', items); store.set('bf_uid', uid); }
 else if(!items.some(i=>i.cat==='htib')){
@@ -2877,8 +2886,9 @@ function catItemsForSpeaker(catId){
   let all = catItemsPref(catId);
   // Same enclosure/drivers as the front pair (unlike a dedicated MTM centre design), so the same
   // physical product can legitimately serve either role without a duplicate catalog entry. Only
-  // in-wall Front L/R items can carry these flags (see the item form), which also means borrowed
-  // candidates already respect the centre's own mount-type restriction without extra filtering.
+  // in-wall or bookshelf Front L/R items can carry these flags (see the item form) — both are
+  // already allowed centre mount types, so borrowed candidates never conflict with the centre's
+  // own mount-type restriction, no extra filtering needed here.
   const borrowed = borrowedSpeakerItems(catId);
   if(borrowed.length) all = all.concat(borrowed);
   if(!MOUNT_CATS.includes(catId)) return all;
@@ -3266,12 +3276,13 @@ function renderQuote(){
     const multLabel = c.id==='sub' ? `×${mult} subs`
       : (c.id==='surrounds' && mult>=3) ? `×${mult} sets (side + rear + wide)`
       : `×${mult} sets`;
-    const optLabel = o => `${o.brand} ${o.model}${itemAttrParen(o)} — ${fmt(eff(o)*mult)}`;
+    const soldAsLabel = o => UNIT_TYPE_LABELS[o.unitType] || 'Each';
+    const optLabel = o => `${o.brand} ${o.model}${itemAttrParen(o)} — Sold as ${soldAsLabel(o)} — ${fmt(eff(o)*mult)}`;
     const line=document.createElement('div'); line.className='qline';
     line.innerHTML = `
       <button class="lockbtn ${locked?'locked':''}" title="${locked?'Locked — kept on regenerate':'Tap to lock this pick'}" onclick="toggleLock('${c.id}')">${locked?'🔒':'🔓'}</button>
       <div>
-        <div class="qcat">${c.name}${mult>1?` <span class="mono" style="color:var(--cyan)">${multLabel}</span>`:''}</div>
+        <div class="qcat">${c.name}${mult>1?` <span class="mono" style="color:var(--cyan)">${multLabel}</span>`:''} <span class="mono" style="color:var(--muted);background:var(--panel2);border-radius:4px;padding:1px 6px;font-size:11px">Sold as ${soldAsLabel(it)}</span></div>
         <div class="qsel"><select onchange="swapItem('${c.id}',this.value)">
           ${opts.map(o=>`<option value="${o.id}" ${o.id===it.id?'selected':''}>${optLabel(o)}</option>`).join('')}
         </select></div>
@@ -3986,6 +3997,7 @@ function buildCompanyProfilePDFPage(doc, q, pageNum, pageCount, opts){
   const margin = 20;
   const ink=[32,38,43], muted=[118,127,114], accent=[124,58,31];
   let y = pageH*0.32;
+  drawWatermark(doc);
 
   if(s.logoImage){
     const logoW = 30, logoH = logoW*(s.logoAspect||0.4);
@@ -4073,6 +4085,7 @@ function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
   const margin = 20;
   const ink=[32,38,43], muted=[118,127,114];
   let y = margin+6;
+  drawWatermark(doc);
 
   doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...ink);
   doc.text('Terms & Conditions', margin, y);
@@ -4086,19 +4099,10 @@ function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
   const termsLines = doc.splitTextToSize(termsText, pageW-margin*2);
   const signatureBlockHeight = 55; // reserve room so the signature never gets pushed onto its own new page
   termsLines.forEach(line=>{
-    if(y > pageH-margin-signatureBlockHeight){ doc.addPage(); y = margin+6; }
+    if(y > pageH-margin-signatureBlockHeight){ doc.addPage(); drawWatermark(doc); y = margin+6; }
     doc.text(line, margin, y);
     y += 5.6;
   });
-
-  // Thank-you note — previously on the cover page, which was removed to save space. Reads
-  // naturally here as a closing remark just above the signature.
-  if(s.thankYou){
-    y = Math.max(y+10, pageH-96);
-    doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
-    const thankLines = doc.splitTextToSize(s.thankYou, pageW-margin*2-10);
-    thankLines.forEach(line=>{ doc.text(line, margin, y); y += 5.2; });
-  }
 
   y = Math.max(y+18, pageH-70);
   if(s.signatureImage){
@@ -4117,15 +4121,28 @@ function buildTermsConditionsPDFPage(doc, pageNum, pageCount){
 // Shared invoice-style header — used by both the priced quotation and the (unpriced) drawings
 // report, via docTypeLabel/refLabel so each shows the right document type and reference field
 // name. Returns the y-position after the header so the caller knows where to continue drawing.
+// Faint diagonal watermark — drawn first on every page, so it sits behind all other content.
+// Uses a very light grey rather than true opacity (not reliably available across jsPDF versions),
+// which achieves the same unobtrusive background effect without risking a rendering failure.
+function drawWatermark(doc, text){
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const s = getSettings();
+  const coreName = (s.name||'Alekh Niranjan').split('—')[0].trim();
+  const label = (text || coreName || 'Alekh Niranjan').toUpperCase();
+  doc.setFont('helvetica','bold'); doc.setFontSize(46);
+  doc.setTextColor(237,234,228);
+  doc.text(label, pageW/2, pageH/2, {align:'center', angle:35});
+}
 function buildInvoiceStyleHeader(doc, q, opts){
   opts = opts || {};
   const s = getSettings();
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 15;
-  let y = margin;
+  let y = margin + 4;
   const ink=[32,38,43], muted=[118,127,114];
-  const blue = [0.145, 0.388, 0.847];
-  const spaced = (str, gap=' ') => str.split(' ').map(w=>w.split('').join(gap)).join('   ');
+  const accent=[124/255,58/255,31/255];
+  drawWatermark(doc);
 
   function fitText(text, maxW){
     text = String(text||'');
@@ -4135,77 +4152,51 @@ function buildInvoiceStyleHeader(doc, q, opts){
     return t+'…';
   }
 
-  // Logo — left side, top of the page. The document-type label and company name flow below it.
+  // Logo, left — company name and tagline flow beside/below it
+  let textX = margin;
   if(s.logoImage){
-    const logoW = 26, logoH = logoW*(s.logoAspect||0.4);
-    try{
-      doc.addImage(s.logoImage, margin, y-2, logoW, logoH);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-      doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
-      y = y - 2 + logoH + 5;
-      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
-      doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
-      y += 10;
-    }catch(e){
-      // Unsupported image data — fall back to the no-logo layout rather than breaking the page
-      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
-      doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-      doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
-      y += 10;
-    }
-  } else {
-    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...blue);
-    doc.text(spaced(opts.docTypeLabel||'QUOTATION'), margin, y+3);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-    doc.text(spaced('ORIGINAL FOR RECIPIENT', '\u200a'), pageW-margin, y+3, {align:'right'});
-    y += 10;
+    const logoW = 24, logoH = logoW*(s.logoAspect||0.4);
+    try{ doc.addImage(s.logoImage, margin, y-2, logoW, logoH); textX = margin + logoW + 6; }catch(e){ /* unsupported image data — fall back to text-only */ }
   }
 
-  // Company name
-  doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(...ink);
-  doc.text(fitText((s.name||'').toUpperCase(), pageW-2*margin), margin, y);
-  y += 6.5;
-
-  // GSTIN
-  if(s.gstin){
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...ink);
-    doc.text('GSTIN ', margin, y);
-    doc.text(s.gstin, margin+doc.getTextWidth('GSTIN ')+1, y);
-    y += 5.5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(19); doc.setTextColor(...ink);
+  const nameLines = doc.splitTextToSize(s.name||'', pageW-margin-textX);
+  nameLines.forEach((line,i)=>{ doc.text(line, textX, y+2+i*7); });
+  const nameBlockH = nameLines.length*7;
+  if(s.qualification){
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...muted);
+    doc.text(fitText(s.qualification, pageW-margin-textX), textX, y+2+nameBlockH);
   }
+  y += Math.max(16, nameBlockH+9);
 
-  // Address — wrapped, dark ink (matching the reference, not muted)
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...ink);
-  if(s.addr){
-    const addrLines = doc.splitTextToSize(s.addr, pageW-2*margin);
-    addrLines.forEach(line=>{ doc.text(line, margin, y); y += 4.6; });
-  }
+  doc.setDrawColor(...accent); doc.setLineWidth(1);
+  doc.line(margin, y, margin+28, y);
+  y += 11;
 
-  // Mobile + Email — bold labels, wrapped if the combined line would otherwise run off the page
-  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...ink);
-  const mobileEmailW = (s.phone?doc.getTextWidth('Mobile '+s.phone+'    '):0) + (s.email?doc.getTextWidth('Email '+s.email):0);
-  const sameLine = mobileEmailW <= pageW-2*margin;
-  let mx = margin;
-  if(s.phone){
-    doc.text('Mobile ', mx, y); mx += doc.getTextWidth('Mobile ');
-    doc.setFont('helvetica','normal'); doc.text(s.phone, mx, y); mx += doc.getTextWidth(s.phone);
-    if(sameLine){ mx += doc.getTextWidth('    '); } else { y += 4.6; mx = margin; }
-    doc.setFont('helvetica','bold');
-  }
-  if(s.email){
-    doc.text('Email ', mx, y); mx += doc.getTextWidth('Email ');
-    doc.setFont('helvetica','normal'); doc.text(s.email, mx, y);
+  // Prepared for — warm, prominent, not squeezed into an invoice field
+  const client = q.client || {};
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+  doc.text(opts.docTypeLabel==='DESIGN REPORT' ? 'Design report prepared for' : 'Proposal prepared for', margin, y);
+  y += 7;
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink);
+  doc.text(client.name||'—', margin, y);
+  y += 11;
+
+  // Thank-you note — the warm, human part of the page, given real room rather than being an
+  // afterthought squeezed beneath commercial details
+  if(s.thankYou){
+    doc.setFont('helvetica','italic'); doc.setFontSize(10); doc.setTextColor(...ink);
+    const thankLines = doc.splitTextToSize(s.thankYou, pageW-margin*2-4);
+    thankLines.forEach(line=>{ doc.text(line, margin, y); y += 5.4; });
   }
   y += 8;
 
-  doc.setDrawColor(...ink); doc.setLineWidth(0.5);
+  doc.setDrawColor(220,216,208); doc.setLineWidth(0.4);
   doc.line(margin, y, pageW-margin, y);
-  y += 7;
+  y += 8;
 
-  // Reference #, Date, Validity — three-column row with an actual computed validity date.
-  // validityDays of exactly 0 is a deliberate value (valid same-day only) and must be respected,
-  // not silently replaced by the 15-day default — a bare `||` would do exactly that since 0 is falsy.
+  // Compact details strip — quotation reference, date, validity, GST info, all present because
+  // a real quotation needs them, but quiet rather than dominating the page
   const validityDays = q.validityDays!=null ? q.validityDays : 15;
   let dateStr = '', validityDateStr = '';
   if(q.date){
@@ -4214,48 +4205,43 @@ function buildInvoiceStyleHeader(doc, q, opts){
     const vd = new Date(q.date); vd.setDate(vd.getDate()+validityDays);
     if(!isNaN(vd)) validityDateStr = vd.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
   }
-  const colW3 = (pageW-2*margin)/3;
-  const rowFields = [
-    [(opts.refLabel||'Quotation #')+': ', q.quoteNo||'—'],
-    ['Date: ', dateStr||q.date||''],
-    ['Validity: ', validityDateStr||`${validityDays} days`],
+  const stripFields = [
+    [(opts.refLabel||'Quotation #'), q.quoteNo||'—'],
+    ['Date', dateStr||q.date||'—'],
+    ['Validity', validityDateStr||`${validityDays} days`],
   ];
-  rowFields.forEach(([label,val],i)=>{
+  const colW3 = (pageW-2*margin)/3;
+  stripFields.forEach(([label,val],i)=>{
     const rx = margin + i*colW3;
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...muted);
-    doc.text(label, rx, y);
-    doc.setFont('helvetica','bold'); doc.setTextColor(...ink);
-    doc.text(val, rx+doc.getTextWidth(label), y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+    doc.text(label.toUpperCase(), rx, y);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+    doc.text(val, rx, y+5);
   });
-  y += 9;
+  y += 13;
 
-  // Customer Details — stacked label + bold name
-  const client = q.client || {};
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
-  doc.text('Customer Details:', margin, y);
-  y += 5.5;
-  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
-  doc.text(client.name||'—', margin, y);
-  y += 8;
+  const stripFields2 = [
+    ['GSTIN', s.gstin||'—'],
+    ['Place of Supply', (client.state||'—').toUpperCase()],
+    ['System', q.channel||'—'],
+  ];
+  stripFields2.forEach(([label,val],i)=>{
+    const rx = margin + i*colW3;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+    doc.text(label.toUpperCase(), rx, y);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+    doc.text(fitText(val, colW3-2), rx, y+5);
+  });
+  y += 13;
 
-  // Place of Supply — stacked label + bold state
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
-  doc.text('Place of Supply:', margin, y);
-  y += 5.5;
-  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...ink);
-  doc.text((client.state||'—').toUpperCase(), margin, y);
-  y += 8;
-
-  // Channel configuration — quick project reference, useful on both document types
-  if(q.channel){
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
-    doc.text('Channel configuration: ', margin, y);
-    doc.setFont('helvetica','bold'); doc.setTextColor(...ink);
-    doc.text(q.channel, margin+doc.getTextWidth('Channel configuration: '), y);
-    y += 8;
-  } else {
-    y += 1;
+  // Contact line — small, quiet, at the very bottom of the strip
+  const contactBits = [s.addr, s.phone, s.email].filter(Boolean).join('   ·   ');
+  if(contactBits){
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(...muted);
+    const contactLines = doc.splitTextToSize(contactBits, pageW-2*margin);
+    contactLines.forEach(line=>{ doc.text(line, margin, y); y += 4; });
   }
+  y += 4;
 
   doc.setDrawColor(...ink); doc.setLineWidth(0.6);
   doc.line(margin, y, pageW-margin, y);
@@ -4305,7 +4291,7 @@ function buildQuotationPDFDoc(q, totalPageCount){
   doc.setFont('helvetica','normal'); doc.setFontSize(9);
   let n=0;
   function row(cat, desc, qty, unit, amount, specs){
-    if(y > pageH - 55){ doc.addPage(); y = margin; tableHeader(); }
+    if(y > pageH - 55){ doc.addPage(); drawWatermark(doc); y = margin; tableHeader(); }
     const cells = { n:String(++n), cat:fitText(cat,38), item:fitText(desc,60), qty:String(qty), unit:fmtPdf(unit), amount:fmtPdf(amount) };
     doc.setTextColor(...ink);
     COLS.forEach(c=> doc.text(cells[c.key], c.x, y, c.align==='right'?{align:'right'}:{}));
@@ -4328,7 +4314,7 @@ function buildQuotationPDFDoc(q, totalPageCount){
   T.serviceLines.forEach(sl=> row('Service', sl.desc, sl.qty, sl.rate, sl.lineTotal));
 
   y += 4;
-  if(y > pageH - 55){ doc.addPage(); y = margin; }
+  if(y > pageH - 55){ doc.addPage(); drawWatermark(doc); y = margin; }
   const totX = pageW-margin-80;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...ink);
   const totRow = (label,val,neg)=>{ doc.text(label, totX, y); doc.text((neg?'- ':'')+fmtPdf(val), pageW-margin, y, {align:'right'}); y+=5.5; };
@@ -4359,6 +4345,7 @@ function buildRoomPlanDrawingPage(doc, plan, pageNum, pageCount){
   const pageH = doc.internal.pageSize.getHeight();
   const margin = PDFX.margin;
   const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent=PDFX.colors.accent, accent2=PDFX.colors.charcoal, accent3=PDFX.colors.accent, green=PDFX.colors.accent;
+  drawWatermark(doc);
 
   const meta = pdfPageMeta(pageNum||2, 'RP');
   const clientName = meta.project;
@@ -4412,6 +4399,17 @@ function buildRoomPlanDrawingPage(doc, plan, pageNum, pageCount){
   doc.rect(X(0)-screenPxW/2, Y(0)-1.2, screenPxW, 2, 'F');
   doc.setFontSize(7); doc.setTextColor(...accent2);
   doc.text(`SCREEN ${plan.screenIn}"${plan.screenIsAT?' · AT':''}${plan.screenType==='motorized'?' · MOTORISED':''}`, X(0), Y(0)+4.5, {align:'center'});
+
+  // Projector throw cone — dashed lines from the projector's mount point to each screen edge,
+  // matching the on-screen SVG plan.
+  const prjMarkerPdf = plan.markers.find(m=>m.id==='PRJ');
+  if(prjMarkerPdf){
+    doc.setDrawColor(...accent2); doc.setLineWidth(0.25);
+    doc.setLineDashPattern([1.4,0.9], 0);
+    doc.line(X(prjMarkerPdf.x), Y(prjMarkerPdf.y), X(-plan.screenW/2), Y(0));
+    doc.line(X(prjMarkerPdf.x), Y(prjMarkerPdf.y), X(plan.screenW/2), Y(0));
+    doc.setLineDashPattern([], 0);
+  }
 
   // cable runs (dashed)
   doc.setDrawColor(...accent3); doc.setLineWidth(0.3);
@@ -4495,6 +4493,7 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
   const pageH = doc.internal.pageSize.getHeight();
   const margin = PDFX.margin;
   const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent=PDFX.colors.accent, accent2=PDFX.colors.charcoal, accent3=PDFX.colors.accent;
+  drawWatermark(doc);
 
   const wallId = wall.charAt(0).toUpperCase()+wall.slice(1);
   const meta = pdfPageMeta(pageNum, 'EL');
@@ -4557,6 +4556,29 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
     doc.rect(seatX0, seatTopY, seatX1-seatX0, seatFrontY-seatTopY, 'FD');
     const backX0 = seatX1 - backDepth*mmPerFt, backTopY = Yh(backHeight);
     doc.rect(backX0, backTopY, seatX1-backX0, seatFrontY-backTopY, 'FD');
+
+    // Screen edge profile — seen side-on, at the front wall, matching the on-screen SVG. A 2"
+    // frame depth is a realistic bezel/frame thickness, drawn protruding slightly into the room.
+    const screenBottomHSidePdf = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
+    const screenFrameDepthFtPdf = 2/12;
+    const screenSideX0Pdf = X(0), screenSideX1Pdf = X(screenFrameDepthFtPdf);
+    const screenSideY0Pdf = Yh(screenBottomHSidePdf+plan.screenH), screenSideY1Pdf = Yh(screenBottomHSidePdf);
+    doc.setDrawColor(...ink); doc.setLineWidth(0.3); doc.setFillColor(255,255,255);
+    doc.rect(screenSideX0Pdf, screenSideY0Pdf, screenSideX1Pdf-screenSideX0Pdf, screenSideY1Pdf-screenSideY0Pdf, 'FD');
+    doc.setFontSize(5.5); doc.setTextColor(...muted);
+    doc.text('SCREEN', screenSideX1Pdf+0.5, screenSideY0Pdf-1.5, {angle:0});
+    // Floor to screen bottom — arrow-style dimension, offset well clear of the room-edge margin
+    const scrDimXPdf = screenSideX1Pdf + 5;
+    doc.setDrawColor(...muted); doc.setLineWidth(0.15);
+    doc.line(screenSideX1Pdf+0.7, floorY, scrDimXPdf-0.5, floorY);
+    doc.line(screenSideX1Pdf+0.7, screenSideY1Pdf, scrDimXPdf-0.5, screenSideY1Pdf);
+    doc.setDrawColor(...accent2); doc.setLineWidth(0.15);
+    doc.line(scrDimXPdf, floorY, scrDimXPdf, screenSideY1Pdf);
+    doc.setFillColor(...accent2);
+    doc.triangle(scrDimXPdf,floorY, scrDimXPdf-0.6,floorY-1.5, scrDimXPdf+0.6,floorY-1.5, 'F');
+    doc.triangle(scrDimXPdf,screenSideY1Pdf, scrDimXPdf-0.6,screenSideY1Pdf+1.5, scrDimXPdf+0.6,screenSideY1Pdf+1.5, 'F');
+    doc.setFontSize(5); doc.setTextColor(...accent2);
+    doc.text(fmtFt(screenBottomHSidePdf), scrDimXPdf-1.2, (floorY+screenSideY1Pdf)/2, {align:'center', angle:90});
   }
 
   if(wall==='front'){
@@ -4567,6 +4589,31 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
     doc.rect(screenX, screenTopY, screenWmm, screenHmm, 'FD');
     doc.setFontSize(6.5); doc.setTextColor(...muted);
     doc.text('SCREEN', X(0), screenTopY-2, {align:'center'});
+    // Screen width — horizontal dimension above the SCREEN label, and screen height — vertical
+    // dimension to the left of the rectangle. Both sit outside the screen box entirely, so
+    // neither ever touches the diagonal, which runs inside the rectangle corner-to-corner.
+    const swDimYPdf = screenTopY - 7;
+    doc.setDrawColor(...muted); doc.setLineWidth(0.15);
+    doc.line(screenX, screenTopY-1, screenX, swDimYPdf-0.3);
+    doc.line(screenX+screenWmm, screenTopY-1, screenX+screenWmm, swDimYPdf-0.3);
+    doc.setDrawColor(...accent3); doc.setLineWidth(0.15);
+    doc.line(screenX, swDimYPdf, screenX+screenWmm, swDimYPdf);
+    doc.setFillColor(...accent3);
+    doc.triangle(screenX,swDimYPdf, screenX+1.5,swDimYPdf-0.6, screenX+1.5,swDimYPdf+0.6, 'F');
+    doc.triangle(screenX+screenWmm,swDimYPdf, screenX+screenWmm-1.5,swDimYPdf-0.6, screenX+screenWmm-1.5,swDimYPdf+0.6, 'F');
+    doc.setFontSize(6); doc.setTextColor(...accent3);
+    doc.text(fmtFt(plan.screenW), X(0), swDimYPdf-1, {align:'center'});
+    const shDimXPdf = screenX - 4;
+    doc.setDrawColor(...muted); doc.setLineWidth(0.15);
+    doc.line(screenX-1, screenTopY, shDimXPdf-0.3, screenTopY);
+    doc.line(screenX-1, screenTopY+screenHmm, shDimXPdf-0.3, screenTopY+screenHmm);
+    doc.setDrawColor(...accent3); doc.setLineWidth(0.15);
+    doc.line(shDimXPdf, screenTopY, shDimXPdf, screenTopY+screenHmm);
+    doc.setFillColor(...accent3);
+    doc.triangle(shDimXPdf,screenTopY, shDimXPdf-0.6,screenTopY+1.5, shDimXPdf+0.6,screenTopY+1.5, 'F');
+    doc.triangle(shDimXPdf,screenTopY+screenHmm, shDimXPdf-0.6,screenTopY+screenHmm-1.5, shDimXPdf+0.6,screenTopY+screenHmm-1.5, 'F');
+    doc.setFontSize(6); doc.setTextColor(...accent3);
+    doc.text(fmtFt(plan.screenH), shDimXPdf-1, screenTopY+screenHmm/2, {align:'center', angle:90});
     // diagonal measurement — corner to corner, matching the screen's actual quoted diagonal size
     const dx1=screenX, dy1=screenTopY+screenHmm, dx2=screenX+screenWmm, dy2=screenTopY;
     doc.setDrawColor(...accent3); doc.setLineWidth(0.3);
@@ -4590,9 +4637,9 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
   const surroundH = m => m.h + surroundOffsetFt;
   const rearSurroundH = m => m.h + rearSurroundOffsetFt;
   let relevant;
-  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C'].includes(m.id) || (m.id.startsWith('SUB') && m.y < plan.L*0.5));
-  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id));
-  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id));
+  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C','HTIB'].includes(m.id) || (m.id.startsWith('SUB') && m.y < plan.L*0.5));
+  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id) || m.id==='PRJ');
+  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id) || m.id==='PRJ');
   else relevant = plan.markers.filter(m=> /^(SL|SR)[1-9]/.test(m.id) || m.id==='TRL' || m.id==='TRR');
 
   if(!relevant.length){
@@ -4616,8 +4663,42 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
       const posFt = isFrontRear ? m.x : m.y;
       const cx = X(posFt), cy = Yh(h);
       const isSub = m.id.startsWith('SUB');
+      const isProjector = m.id==='PRJ';
       doc.setDrawColor(20,20,20);
-      if(isSub){ doc.setFillColor(...accent2); doc.rect(cx-2.5,cy-1.8,5,3.6,'F'); }
+      if(isProjector){
+        // Ceiling mount bracket + projector body — visually distinct from a speaker marker
+        doc.setLineWidth(0.4); doc.line(cx, ceilY, cx, cy-1.3);
+        doc.setFillColor(...accent2); doc.rect(cx-3.3, cy-1.3, 6.6, 2.7, 'F');
+        doc.setDrawColor(20,20,20); doc.setLineWidth(0.2);
+        doc.setFillColor(255,255,255); doc.circle(cx+2, cy, 0.7, 'FD');
+        // Ceiling to projector — the drop-pole distance itself, offset to the right of the
+        // marker so it never collides with the standard floor-to-height dimension on its left.
+        const prjDropDimXPdf = cx + 6;
+        doc.setDrawColor(...muted); doc.setLineWidth(0.15);
+        doc.line(cx+0.7, ceilY, prjDropDimXPdf-0.5, ceilY);
+        doc.line(cx+0.7, cy-1.3, prjDropDimXPdf-0.5, cy-1.3);
+        if((cy-1.3-ceilY) > 4){
+          doc.setDrawColor(...accent2); doc.setLineWidth(0.15);
+          doc.line(prjDropDimXPdf, ceilY, prjDropDimXPdf, cy-1.3);
+          doc.setFillColor(...accent2);
+          doc.triangle(prjDropDimXPdf,ceilY, prjDropDimXPdf-0.6,ceilY+1.5, prjDropDimXPdf+0.6,ceilY+1.5, 'F');
+          doc.triangle(prjDropDimXPdf,cy-1.3, prjDropDimXPdf-0.6,cy-2.8, prjDropDimXPdf+0.6,cy-2.8, 'F');
+          doc.setFontSize(5); doc.setTextColor(...accent2);
+          doc.text(fmtFt(plan.H-h), prjDropDimXPdf-1.2, (ceilY+cy-1.3)/2, {align:'center', angle:90});
+        }
+        // Vision lines — same two-line geometry as the on-screen SVG: a straight/level reference
+        // line from the lens to the image's TOP edge (the lens's own height), and a second line
+        // down to the image's BOTTOM edge, one full image-height below. Only meaningful on
+        // left/right views, where depth and the screen's front-wall position share the same plane.
+        if(!isFrontRear){
+          const screenBottomHPrj = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
+          doc.setDrawColor(...accent2); doc.setLineWidth(0.25);
+          doc.setLineDashPattern([1.4,0.9], 0);
+          doc.line(cx+2, cy, X(0), cy);
+          doc.line(cx+2, cy, X(0), Yh(screenBottomHPrj));
+          doc.setLineDashPattern([], 0);
+        }
+      } else if(isSub){ doc.setFillColor(...accent2); doc.rect(cx-2.5,cy-1.8,5,3.6,'F'); }
       else { doc.setFillColor(...accent); doc.circle(cx, cy, 2.2, 'F'); }
       doc.setFontSize(6); doc.setTextColor(...ink);
       doc.text(m.id, cx, cy-3.5, {align:'center', maxWidth: 16});
@@ -4645,6 +4726,20 @@ function buildWallElevationPDFPage(doc, plan, wall, pageNum, pageCount){
       doc.setFontSize(4.5); doc.setTextColor(...accent3);
       doc.text(`${m.id} ${fmtFt(Math.abs(posFt-(isFrontRear?-plan.W/2:0)))}`, (wallX0+cx)/2, rowY-1, {align:'center'});
     });
+  }
+
+  // MLP to front wall — stacked as one more row right after the last per-marker row. Recomputes
+  // mlpX locally since the seat-icon block's own declaration is out of scope by this point.
+  if(!isFrontRear){
+    const mlpXPdf = X(plan.seat.y);
+    const mlpRowYPdf = dimYB + 5 + relevant.length*4;
+    doc.setDrawColor(...accent); doc.setLineWidth(0.15);
+    doc.line(wallX0, mlpRowYPdf, mlpXPdf, mlpRowYPdf);
+    doc.setFillColor(...accent);
+    doc.triangle(wallX0,mlpRowYPdf, wallX0+1,mlpRowYPdf-0.5, wallX0+1,mlpRowYPdf+0.5, 'F');
+    doc.triangle(mlpXPdf,mlpRowYPdf, mlpXPdf-1,mlpRowYPdf-0.5, mlpXPdf-1,mlpRowYPdf+0.5, 'F');
+    doc.setFontSize(5); doc.setTextColor(...accent);
+    doc.text(`MLP-front ${fmtFt(plan.seat.y)}`, (wallX0+mlpXPdf)/2, mlpRowYPdf-0.8, {align:'center'});
   }
 
   if(wall==='front' && (frontAngleDeg>0 || centerAngleDeg>0)){
@@ -4675,6 +4770,7 @@ function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
   const pageH = doc.internal.pageSize.getHeight();
   const margin = PDFX.margin;
   const ink=PDFX.colors.ink, muted=PDFX.colors.slate, accent3=PDFX.colors.accent;
+  drawWatermark(doc);
 
   const meta = pdfPageMeta(pageNum||7, 'SP');
   const clientName = meta.project;
@@ -4718,7 +4814,7 @@ function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
   let ry = ty;
   let rowIdx = 0;
   plan.markers.forEach(m=>{
-    if(ry > pageH - margin - 30){ doc.addPage(); ry = margin+10; rowIdx = 0; }
+    if(ry > pageH - margin - 30){ doc.addPage(); drawWatermark(doc); ry = margin+10; rowIdx = 0; }
     const rH = m.note ? rowH+7 : rowH;
     if(rowIdx%2===1){
       doc.setFillColor(...PDFX.colors.panelTint);
@@ -4744,7 +4840,7 @@ function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
 
   if(plan.equipment.length){
     ry += 8;
-    if(ry > pageH - margin - 40){ doc.addPage(); ry = margin+10; }
+    if(ry > pageH - margin - 40){ doc.addPage(); drawWatermark(doc); ry = margin+10; }
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
     doc.text('Equipment at the Rack', margin, ry); ry += 8;
     doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
@@ -4756,7 +4852,7 @@ function buildSpeakerPositionPDFPage(doc, plan, pageNum, pageCount){
   }
 
   ry += 8;
-  if(ry > pageH - margin - 30){ doc.addPage(); ry = margin+10; }
+  if(ry > pageH - margin - 30){ doc.addPage(); drawWatermark(doc); ry = margin+10; }
   doc.setFillColor(...PDFX.colors.panelTint);
   doc.rect(margin, ry-5, pageW-margin*2, 24, 'F');
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
@@ -4778,10 +4874,12 @@ function buildProductSpecsPDFPage(doc, q, pageNum, pageCount){
   const margin = 15;
   const ink=[32,38,43], muted=[118,127,114];
   let y = margin+4;
+  drawWatermark(doc);
 
   function pageBreakIfNeeded(needed){
     if(y + needed > pageH - margin - 12){
       doc.addPage();
+      drawWatermark(doc);
       y = margin+4;
       doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...muted);
       doc.text('PRODUCT SPECIFICATIONS (CONTINUED)', margin, y);
@@ -5431,7 +5529,7 @@ function syncCategoryFieldsVisibility(){
     // overwriting real data the moment someone opens it to edit something unrelated.
     opt.hidden = (cat==='center' && centerRestricted.includes(opt.value) && mountSelect.value !== opt.value);
   });
-  document.getElementById('miAlsoSurroundRow').style.display = (cat==='fronts' && mountSelect.value==='inwall') ? 'block' : 'none';
+  document.getElementById('miAlsoSurroundRow').style.display = (cat==='fronts' && (mountSelect.value==='inwall'||mountSelect.value==='bookshelf')) ? 'block' : 'none';
   document.getElementById('miSpeakerSpecRow').style.display = MOUNT_CATS.includes(cat) ? 'flex' : 'none';
   document.getElementById('miAvrTypeRow').style.display = 'none';
   document.getElementById('miCableLengthRow').style.display = ['spkcable','avcable','netcable'].includes(cat) ? 'flex' : 'none';
@@ -5496,8 +5594,8 @@ function saveItem(){
   const resolution=cat==='projector' ? document.getElementById('miResolution').value : null;
   const lightSource=cat==='projector' ? document.getElementById('miLightSource').value : null;
   const mountType=MOUNT_CATS.includes(cat) ? document.getElementById('miMountType').value : null;
-  const usableAsSurround = (cat==='fronts' && mountType==='inwall') ? document.getElementById('miAlsoSurround').checked : false;
-  const usableAsCenter = (cat==='fronts' && mountType==='inwall') ? document.getElementById('miAlsoCenter').checked : false;
+  const usableAsSurround = (cat==='fronts' && (mountType==='inwall'||mountType==='bookshelf')) ? document.getElementById('miAlsoSurround').checked : false;
+  const usableAsCenter = (cat==='fronts' && (mountType==='inwall'||mountType==='bookshelf')) ? document.getElementById('miAlsoCenter').checked : false;
   const avrType=cat==='avr' ? 'receiver' : cat==='avprocessor' ? 'processor' : null;
   const cableLength=['spkcable','avcable','netcable'].includes(cat) ? (+document.getElementById('miCableLength').value||null) : null;
   const cableGauge=cat==='spkcable' ? (+document.getElementById('miCableGauge').value||null) : null;
@@ -6118,6 +6216,7 @@ function syncAngleLabels(){
   document.getElementById('rpFrontElevVal').textContent = document.getElementById('rpFrontElev').value+'°';
   document.getElementById('rpCenterElevVal').textContent = document.getElementById('rpCenterElev').value+'°';
   document.getElementById('rpFrontWideElevVal').textContent = document.getElementById('rpFrontWideElev').value+'°';
+  document.getElementById('rpProjectorDropVal').textContent = (function(){ const v=+document.getElementById('rpProjectorDrop').value; return v===0 ? 'Flush' : v.toFixed(2)+'ft'; })();
   document.getElementById('rpSurroundElevVal').textContent = (function(){ const v=+document.getElementById('rpSurroundElev').value; return (v>=0?'+':'')+v.toFixed(2)+'ft'; })();
   document.getElementById('rpRearSurroundElevVal').textContent = (function(){ const v=+document.getElementById('rpRearSurroundElev').value; return (v>=0?'+':'')+v.toFixed(2)+'ft'; })();
   document.getElementById('rpSubDistVal').textContent = (+document.getElementById('rpSubDist').value).toFixed(2)+'ft';
@@ -6128,6 +6227,8 @@ function resetRoomPlanAngles(){
   document.getElementById('rpAngleRear').value = RP_DEFAULT_ANGLES.rear;
   document.getElementById('rpAngleAtmos').value = RP_DEFAULT_ANGLES.atmosElev;
   delete document.getElementById('rpAtmosSep').dataset.userSet; // back to the room-width-scaled default
+  document.getElementById('rpProjectorDrop').value = 0;
+  delete document.getElementById('rpScreenHeight').dataset.userSet; // back to the projector-derived recommendation
   syncAngleLabels();
   drawRoomPlan();
 }
@@ -6430,7 +6531,28 @@ function computeRoomPlan(){
       projY = withinRange ? sliderVal : (minFt+maxFt)/2;
       projNote = `Mount ${projY.toFixed(1)}ft from the screen wall, centred left-right. Throw range for this lens: ${minFt.toFixed(1)}–${maxFt.toFixed(1)}ft — anywhere in that band works, zoom to fit.`;
     }
-    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, H, {ceiling:true, kind:'video', note:projNote, routeMode:'conduit'});
+    const dropEl = typeof document!=='undefined' ? document.getElementById('rpProjectorDrop') : null;
+    const projDropFt = dropEl ? (+dropEl.value || 0) : 0;
+    const projH = Math.max(earH, H - projDropFt);
+    addM('PRJ','Projector'+projTag+(brandLabel('projector')?' — '+brandLabel('projector'):''), {x:0, y:projY}, projH, {ceiling:true, kind:'video', note:projNote, routeMode:'conduit', dropFt:projDropFt});
+
+    // Screen bottom height, derived from the projector's actual mounted position — this is the
+    // answer to "how high should the screen be": for a level, fixed-lens ceiling mount (no lens
+    // shift — the standard case absent other data), the image sits entirely BELOW the lens's
+    // optical centreline. That gives two distinct reference lines, drawn on the side wall views:
+    // a straight, level line from the lens to the image's TOP edge (at the mount height itself),
+    // and a second line down to the image's BOTTOM edge, exactly one image-height below the first.
+    // So: screen bottom height = projector mount height − image height. Screen height was
+    // previously an independent slider with no relationship to the projector at all — this
+    // couples them correctly, the same "recommended but overridable" pattern as the throw slider.
+    const screenHeightEl = typeof document!=='undefined' ? document.getElementById('rpScreenHeight') : null;
+    if(screenHeightEl){
+      const minH = +screenHeightEl.min, maxH = +screenHeightEl.max;
+      const recommendedScreenBottomH = Math.min(maxH, Math.max(minH, Math.round((projH-screenH)*4)/4));
+      if(!screenHeightEl.dataset.userSet) screenHeightEl.value = recommendedScreenBottomH.toFixed(2);
+      const valEl = document.getElementById('rpScreenHeightVal');
+      if(valEl) valEl.textContent = (+screenHeightEl.value).toFixed(2)+'ft';
+    }
   }
 
   // acoustic treatment — first-reflection zones on the side walls, roughly midway between the
@@ -6520,6 +6642,7 @@ function drawRoomPlan(){
   const hasFrontWide = plan.markers.some(m=>m.id==='FWL'||m.id==='FWR');
   document.getElementById('rpAngleFrontWideRow').style.display = hasFrontWide ? '' : 'none';
   document.getElementById('rpFrontWideElevRow').style.display = hasFrontWide ? '' : 'none';
+  document.getElementById('rpProjectorDropRow').style.display = plan.markers.some(m=>m.id==='PRJ') ? '' : 'none';
   syncAtmosSepSlider(plan.W);
   const show = document.getElementById('rpShow').value;
   const { W, L, seat, rackPos, markers, screenW } = plan;
@@ -6648,6 +6771,15 @@ function drawRoomPlan(){
   }
   parts.push(`<rect x="${X(0)-screenPx/2}" y="${Y(0)-4}" width="${screenPx}" height="7" rx="1.5" fill="var(--accent2)" ${plan.screenIsAT?'fill-opacity="0.55"':''}/>`);
   parts.push(`<text x="${X(0)}" y="${Y(0)+19}" text-anchor="middle" font-size="10" font-family="var(--mono)" fill="var(--accent2)">SCREEN ${plan.screenIn}"${plan.screenIsAT?' · AT':''}${plan.screenType==='motorized'?' · MOTORISED':''}</text>`);
+
+  // Projector throw cone — dashed lines from the projector's mount point to each screen edge,
+  // showing the projection envelope. Distinct from the MLP viewing cone below (dashed vs solid,
+  // accent2 to match the projector/video marker colour) so the two aren't confused for each other.
+  const prjMarker = markers.find(m=>m.id==='PRJ');
+  if(prjMarker){
+    parts.push(`<line x1="${X(prjMarker.x)}" y1="${Y(prjMarker.y)}" x2="${X(-screenW/2)}" y2="${Y(0)}" stroke="var(--accent2)" stroke-width="0.9" stroke-dasharray="5 3" opacity="0.6"/>`);
+    parts.push(`<line x1="${X(prjMarker.x)}" y1="${Y(prjMarker.y)}" x2="${X(screenW/2)}" y2="${Y(0)}" stroke="var(--accent2)" stroke-width="0.9" stroke-dasharray="5 3" opacity="0.6"/>`);
+  }
 
   const showSpk = show!=='cables';
   const showCbl = show!=='speakers';
@@ -6950,8 +7082,9 @@ function setRoomPlanView(view){
   if(view==='top') drawRoomPlan(); else drawWallElevation(view);
 }
 function onScreenHeightInput(){
+  document.getElementById('rpScreenHeight').dataset.userSet = '1';
   document.getElementById('rpScreenHeightVal').textContent = (+document.getElementById('rpScreenHeight').value).toFixed(2)+'ft';
-  if(document.getElementById('rpViewFrontBtn').classList.contains('on')) drawWallElevation('front');
+  redrawActiveRoomPlanView();
 }
 function onFrontElevInput(){
   document.getElementById('rpFrontElevVal').textContent = document.getElementById('rpFrontElev').value+'°';
@@ -6963,6 +7096,12 @@ function onCenterElevInput(){
 }
 function onFrontWideElevInput(){
   document.getElementById('rpFrontWideElevVal').textContent = document.getElementById('rpFrontWideElev').value+'°';
+  if(document.getElementById('rpViewLeftBtn').classList.contains('on')) drawWallElevation('left');
+  if(document.getElementById('rpViewRightBtn').classList.contains('on')) drawWallElevation('right');
+}
+function onProjectorDropInput(){
+  const v = +document.getElementById('rpProjectorDrop').value;
+  document.getElementById('rpProjectorDropVal').textContent = v===0 ? 'Flush' : v.toFixed(2)+'ft';
   if(document.getElementById('rpViewLeftBtn').classList.contains('on')) drawWallElevation('left');
   if(document.getElementById('rpViewRightBtn').classList.contains('on')) drawWallElevation('right');
 }
@@ -6989,9 +7128,9 @@ function drawWallElevation(wall){
   // how much strip height to reserve — otherwise a wall with several markers stacks rows deep
   // enough to collide with the title block, which sits in the same bottom strip.
   let relevant;
-  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C'].includes(m.id) || (m.id.startsWith('SUB') && m.y < L*0.5));
-  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id));
-  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id));
+  if(wall==='front') relevant = plan.markers.filter(m=>['FL','FR','C','HTIB'].includes(m.id) || (m.id.startsWith('SUB') && m.y < L*0.5));
+  else if(wall==='left') relevant = plan.markers.filter(m=>/^(SL0|TFL|TRL|FWL)/.test(m.id) || m.id==='PRJ');
+  else if(wall==='right') relevant = plan.markers.filter(m=>/^(SR0|TFR|TRR|FWR)/.test(m.id) || m.id==='PRJ');
   else relevant = plan.markers.filter(m=> /^(SL|SR)[1-9]/.test(m.id) || m.id==='TRL' || m.id==='TRR');
   const frontAngleDeg = +document.getElementById('rpFrontElev').value || 0;
   const centerAngleDeg = +document.getElementById('rpCenterElev').value || 0;
@@ -7010,7 +7149,11 @@ function drawWallElevation(wall){
   const leftM = 62, topM = 30, rightM = 30;
   // Extra vertical room needed for the stacked per-marker dimension rows beyond the first one —
   // each additional marker on this wall needs its own 13px row before the title block can start.
-  const extraRowsH = Math.max(0, relevant.length-1)*13;
+  // Extra vertical room needed for the stacked per-marker dimension rows beyond the first one —
+  // each additional marker on this wall needs its own 13px row before the title block can start.
+  // Left/right walls also get one more row for the MLP-to-front-wall dimension, not tied to a marker.
+  const mlpRowExtra = !isFrontRear ? 13 : 0;
+  const extraRowsH = Math.max(0, relevant.length-1)*13 + mlpRowExtra;
   const bottomStripH = 148 + extraRowsH;
   const drawW = axisFt*pxPerFt, drawH = H*pxPerFt;
   const minSheetW = 560;
@@ -7057,9 +7200,35 @@ function drawWallElevation(wall){
     parts.push(`<rect x="${seatX0}" y="${seatTopY}" width="${seatX1-seatX0}" height="${seatFrontY-seatTopY}" rx="3" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.3"/>`);
     const backX0 = seatX1 - backDepth*pxPerFt, backTopY = yPx(backHeight);
     parts.push(`<rect x="${backX0}" y="${backTopY}" width="${seatX1-backX0}" height="${seatFrontY-backTopY}" rx="3" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.3"/>`);
-  }
 
-  // height dimension (left side) — floor to ceiling, arrow-marker style matching the top-down plan
+    // MLP to front wall — stacked as one more row right after the last per-marker row. Uses
+    // floorY+26 directly (dimYB's own formula) since dimYB itself isn't defined until later in
+    // this function, after this block runs.
+    const mlpRowY = (floorY+26) + 16 + relevant.length*13;
+    const mlpEdgePx = xPx(0);
+    parts.push(`<line x1="${mlpEdgePx}" y1="${mlpRowY}" x2="${mlpX}" y2="${mlpRowY}" stroke="var(--accent)" stroke-width="0.5" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+    parts.push(`<rect x="${(mlpEdgePx+mlpX)/2-26}" y="${mlpRowY-6}" width="52" height="10" fill="var(--panel)"/>`);
+    parts.push(`<text x="${(mlpEdgePx+mlpX)/2}" y="${mlpRowY+3}" text-anchor="middle" font-size="7.5" font-family="var(--mono)" fill="var(--accent)">MLP–front ${fmtFt(seat.y)}</text>`);
+
+    // Screen edge profile — seen side-on, at the front wall. A 2" frame depth is a realistic
+    // bezel/frame thickness for a real screen, drawn protruding slightly into the room so it
+    // reads as a physical object rather than a flat line, and gives the projector's vision line
+    // (drawn later, per-marker) a visible target instead of pointing at empty wall.
+    const screenBottomHSide = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
+    const screenFrameDepthFt = 2/12;
+    const screenSideX0 = xPx(0), screenSideX1 = xPx(screenFrameDepthFt);
+    const screenSideY0 = yPx(screenBottomHSide+screenH), screenSideY1 = yPx(screenBottomHSide);
+    parts.push(`<rect x="${screenSideX0}" y="${screenSideY0}" width="${screenSideX1-screenSideX0}" height="${screenSideY1-screenSideY0}" fill="#ffffff" stroke="var(--ink)" stroke-width="1.4"/>`);
+    parts.push(`<text x="${screenSideX0+2}" y="${screenSideY0-5}" font-size="7.5" font-family="var(--mono)" fill="var(--muted)">SCREEN</text>`);
+    // Floor to screen bottom — arrow-style dimension, offset well clear of the room-edge margin
+    // where the EAR LVL label sits, so the two never visually crowd each other.
+    const scrDimX = screenSideX1 + 16;
+    parts.push(`<line x1="${screenSideX1+2}" y1="${floorY}" x2="${scrDimX-4}" y2="${floorY}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${screenSideX1+2}" y1="${screenSideY1}" x2="${scrDimX-4}" y2="${screenSideY1}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${scrDimX}" y1="${floorY}" x2="${scrDimX}" y2="${screenSideY1}" stroke="var(--accent2)" stroke-width="0.6" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+    parts.push(`<rect x="${scrDimX-8}" y="${(floorY+screenSideY1)/2-16}" width="14" height="32" fill="var(--panel)"/>`);
+    parts.push(`<text x="${scrDimX}" y="${(floorY+screenSideY1)/2}" text-anchor="middle" font-size="8" font-family="var(--mono)" fill="var(--accent2)" transform="rotate(-90 ${scrDimX} ${(floorY+screenSideY1)/2})">${fmtFt(screenBottomHSide)}</text>`);
+  }  // height dimension (left side) — floor to ceiling, arrow-marker style matching the top-down plan
   const dimXL = xPx(isFrontRear?-W/2:0) - 26;
   [0, H].forEach(hf=>{
     parts.push(`<line x1="${xPx(isFrontRear?-W/2:0)-6}" y1="${yPx(hf)}" x2="${dimXL-5}" y2="${yPx(hf)}" stroke="var(--ink)" stroke-width="0.6"/>`);
@@ -7085,6 +7254,21 @@ function drawWallElevation(wall){
     parts.push(`<rect x="${screenX}" y="${screenTopY}" width="${screenWpx}" height="${screenHpx}" fill="#ffffff" stroke="var(--ink)" stroke-width="1.8" rx="2"/>`);
     parts.push(`<rect x="${screenX+screenWpx*0.04}" y="${screenTopY+screenHpx*0.04}" width="${screenWpx*0.92}" height="${screenHpx*0.92}" fill="none" stroke="var(--border2)" stroke-width="0.8"/>`);
     parts.push(`<text x="${xPx(0)}" y="${screenTopY-8}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--muted)">SCREEN ${fmtFt(screenH)} × ${fmtFt(screenW)}, sill ${fmtFt(screenBottomH)}</text>`);
+    // Screen width — horizontal dimension above the sill/size label, and screen height — vertical
+    // dimension to the left of the rectangle. Both sit outside the screen box entirely, so neither
+    // ever touches the diagonal measurement, which runs inside the rectangle corner-to-corner.
+    const swDimY = screenTopY - 24;
+    parts.push(`<line x1="${screenX}" y1="${screenTopY-4}" x2="${screenX}" y2="${swDimY-4}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${screenX+screenWpx}" y1="${screenTopY-4}" x2="${screenX+screenWpx}" y2="${swDimY-4}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${screenX}" y1="${swDimY}" x2="${screenX+screenWpx}" y2="${swDimY}" stroke="var(--accent3)" stroke-width="0.6" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+    parts.push(`<rect x="${xPx(0)-24}" y="${swDimY-9}" width="48" height="13" fill="var(--panel)"/>`);
+    parts.push(`<text x="${xPx(0)}" y="${swDimY-2}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--accent3)">${fmtFt(screenW)}</text>`);
+    const shDimX = screenX - 14;
+    parts.push(`<line x1="${screenX-4}" y1="${screenTopY}" x2="${shDimX-4}" y2="${screenTopY}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${screenX-4}" y1="${screenTopY+screenHpx}" x2="${shDimX-4}" y2="${screenTopY+screenHpx}" stroke="var(--muted)" stroke-width="0.5"/>`);
+    parts.push(`<line x1="${shDimX}" y1="${screenTopY}" x2="${shDimX}" y2="${screenTopY+screenHpx}" stroke="var(--accent3)" stroke-width="0.6" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+    parts.push(`<rect x="${shDimX-8}" y="${screenTopY+screenHpx/2-20}" width="14" height="40" fill="var(--panel)"/>`);
+    parts.push(`<text x="${shDimX}" y="${screenTopY+screenHpx/2}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--accent3)" transform="rotate(-90 ${shDimX} ${screenTopY+screenHpx/2})">${fmtFt(screenH)}</text>`);
     // diagonal measurement — corner to corner, matching the screen's actual quoted diagonal size
     const dx1=screenX, dy1=screenTopY+screenHpx, dx2=screenX+screenWpx, dy2=screenTopY;
     parts.push(`<line x1="${dx1}" y1="${dy1}" x2="${dx2}" y2="${dy2}" stroke="var(--accent3)" stroke-width="0.8" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
@@ -7106,9 +7290,40 @@ function drawWallElevation(wall){
       const posFt = isFrontRear ? m.x : m.y;
       const px = xPx(posFt), py = yPx(h);
       const isSub = m.id.startsWith('SUB');
-      parts.push(isSub
-        ? `<rect x="${px-8}" y="${py-6}" width="16" height="12" rx="1.5" fill="var(--near-black)" stroke="var(--yellow)" stroke-width="1.5"/>`
-        : `<circle cx="${px}" cy="${py}" r="7" fill="var(--yellow)" stroke="var(--near-black)" stroke-width="1.5"/>`);
+      const isProjector = m.id==='PRJ';
+      if(isProjector){
+        // Ceiling mount bracket (short drop from the ceiling) + projector body — visually distinct
+        // from a speaker marker, since it's mounted equipment, not a speaker.
+        parts.push(`<line x1="${px}" y1="${ceilY}" x2="${px}" y2="${py-4}" stroke="var(--near-black)" stroke-width="2"/>`);
+        parts.push(`<rect x="${px-11}" y="${py-4}" width="22" height="9" rx="1.5" fill="var(--accent2)" stroke="var(--near-black)" stroke-width="1.3"/>`);
+        parts.push(`<circle cx="${px+7}" cy="${py}" r="2.2" fill="var(--panel)" stroke="var(--near-black)" stroke-width="1"/>`);
+        // Ceiling to projector — the drop-pole distance itself, offset to the right of the marker
+        // so it never collides with the standard floor-to-height dimension on its left.
+        const prjDropDimX = px + 20;
+        parts.push(`<line x1="${px+2}" y1="${ceilY}" x2="${prjDropDimX-4}" y2="${ceilY}" stroke="var(--muted)" stroke-width="0.5"/>`);
+        parts.push(`<line x1="${px+2}" y1="${py-4}" x2="${prjDropDimX-4}" y2="${py-4}" stroke="var(--muted)" stroke-width="0.5"/>`);
+        parts.push(`<line x1="${prjDropDimX}" y1="${ceilY}" x2="${prjDropDimX}" y2="${py-4}" stroke="var(--accent2)" stroke-width="0.6" marker-start="url(#dimArrowStart-${uid})" marker-end="url(#dimArrowEnd-${uid})"/>`);
+        if(py-4-ceilY > 14){
+          parts.push(`<rect x="${prjDropDimX-8}" y="${(ceilY+py-4)/2-14}" width="14" height="28" fill="var(--panel)"/>`);
+          parts.push(`<text x="${prjDropDimX}" y="${(ceilY+py-4)/2}" text-anchor="middle" font-size="8" font-family="var(--mono)" fill="var(--accent2)" transform="rotate(-90 ${prjDropDimX} ${(ceilY+py-4)/2})">${fmtFt(H-h)}</text>`);
+        }
+        // Vision lines — the real two-line geometry of a level, fixed-lens ceiling mount: a
+        // straight/level reference line from the lens to the image's TOP edge (at the lens's own
+        // height, since the image sits entirely below it), and a second, sloped line down to the
+        // image's BOTTOM edge — one full image-height below. Only meaningful on left/right views,
+        // since that's the only elevation where depth (this axis) and the screen's front-wall
+        // position share the same plane.
+        if(!isFrontRear){
+          const screenBottomHPrj = +(document.getElementById('rpScreenHeight')?document.getElementById('rpScreenHeight').value:2) || 2;
+          const lensPx = px+7, lensPy = py;
+          parts.push(`<line x1="${lensPx}" y1="${lensPy}" x2="${xPx(0)}" y2="${lensPy}" stroke="var(--accent2)" stroke-width="0.9" stroke-dasharray="5 3" opacity="0.65"/>`);
+          parts.push(`<line x1="${lensPx}" y1="${lensPy}" x2="${xPx(0)}" y2="${yPx(screenBottomHPrj)}" stroke="var(--accent2)" stroke-width="0.9" stroke-dasharray="5 3" opacity="0.65"/>`);
+        }
+      } else {
+        parts.push(isSub
+          ? `<rect x="${px-8}" y="${py-6}" width="16" height="12" rx="1.5" fill="var(--near-black)" stroke="var(--yellow)" stroke-width="1.5"/>`
+          : `<circle cx="${px}" cy="${py}" r="7" fill="var(--yellow)" stroke="var(--near-black)" stroke-width="1.5"/>`);
+      }
       parts.push(`<text x="${px}" y="${py-12}" text-anchor="middle" font-size="9" font-family="var(--mono)" font-weight="600" fill="var(--ink)">${m.id}</text>`);
       const dimX = px - 14;
       parts.push(`<line x1="${px-9}" y1="${floorY}" x2="${dimX-4}" y2="${floorY}" stroke="var(--muted)" stroke-width="0.5"/>`);
