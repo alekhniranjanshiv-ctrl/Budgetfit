@@ -238,7 +238,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(243,244,250,.82);-webkit
 }
 .rp-plan-card{flex:0 0 auto;margin-bottom:0}
 .rp-scroll-area{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:16px;overscroll-behavior:contain}
-#roomPlanWrap{background:var(--panel2);border-radius:10px;padding:10px;text-align:center;height:54vh;height:54dvh;min-height:340px;max-height:560px;display:flex;align-items:center;justify-content:center;transition:height .22s ease,min-height .22s ease}
+#roomPlanWrap{background:var(--panel2);border-radius:10px;padding:10px;text-align:center;height:42vh;height:42dvh;min-height:280px;max-height:440px;display:flex;align-items:center;justify-content:center;transition:height .22s ease,min-height .22s ease}
 /* Collapsed state — the drawing shrinks to a small preview strip so the configurator below gets
    real room to work in. Solves the exact tension of a big-by-default drawing on a fixed-height
    mobile layout: you can't have both large AND leave space for the controls at the same time, so
@@ -3104,6 +3104,15 @@ function generate(){
   else if(missed.length===1) msg += ` (${missed[0]}: preferred brand unavailable, used another)`;
   else if(missed.length>1) msg += ` (${missed.length} categories: preferred brand unavailable, used another)`;
   toast(msg);
+
+  // Keep the 2D drawing in sync with whatever just got generated. Switching INTO the room plan
+  // tab already redraws it (via showTab), but if the person stays on that tab — e.g. changes the
+  // channel config or switches to HTiB and regenerates without navigating away — nothing told the
+  // SVG to catch up, so it kept showing the previous layout even though the quote underneath it
+  // had genuinely changed.
+  if(document.getElementById('tab-roomplan') && document.getElementById('tab-roomplan').classList.contains('on') && typeof redrawActiveRoomPlanView==='function'){
+    redrawActiveRoomPlanView();
+  }
 }
 function saveInstallPrefs(pct, min){ store.set('bf_installprefs', {pct, min}); }
 function loadInstallPrefs(){
@@ -6922,6 +6931,9 @@ function drawRoomPlan(){
   svg.setAttribute('width', svgW);
   svg.setAttribute('height', svgH);
   svg.style.maxWidth = '100%';
+  svg.style.maxHeight = '100%';
+  svg.style.width = 'auto';
+  svg.style.height = 'auto';
   svg.innerHTML = parts.join('');
 
   renderRoomPlanTable(plan);
@@ -7399,6 +7411,9 @@ function drawWallElevation(wall){
   svg.setAttribute('width', svgW);
   svg.setAttribute('height', svgH);
   svg.style.maxWidth = '100%';
+  svg.style.maxHeight = '100%';
+  svg.style.width = 'auto';
+  svg.style.height = 'auto';
   svg.innerHTML = parts.join('');
 }
 // Dragging the throw-distance slider picks exactly where in the valid zoom range to mount the
